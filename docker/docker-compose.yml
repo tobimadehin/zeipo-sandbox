@@ -1,0 +1,22 @@
+services:
+  whisper:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ..:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: '8gb'
+    tty: true
+    stdin_open: true
+    command: sleep infinity

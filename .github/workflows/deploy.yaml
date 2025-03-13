@@ -1,0 +1,76 @@
+name: Deploy Whisper Service
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Google Cloud Auth
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+    
+    - name: Create VM if not exists
+      run: |
+        if ! gcloud compute instances describe whisper-dev --zone=us-central1-a &> /dev/null; then
+          gcloud compute instances create whisper-dev \
+            --machine-type=n1-standard-4 \
+            --accelerator=type=nvidia-tesla-t4,count=1 \
+            --boot-disk-size=50GB \
+            --image-family=pytorch-2-0-cu118 \
+            --image-project=deeplearning-platform-release \
+            --metadata=install-nvidia-driver=True \
+            --scopes=storage-full,compute-rw \
+            --tags=http-server,https-server \
+            --zone=us-central1-a
+        else
+          echo "VM already exists, skipping creation"
+        fi
+    
+    - name: Allow HTTP/HTTPS traffic
+      run: |
+        gcloud compute firewall-rules create allow-http \
+          --allow tcp:80,tcp:8000 \
+          --target-tags=http-server \
+          --description="Allow HTTP traffic" \
+          --direction=INGRESS || echo "Firewall rule already exists or other error"
+        
+        gcloud compute firewall-rules create allow-https \
+          --allow tcp:443 \
+          --target-tags=https-server \
+          --description="Allow HTTPS traffic" \
+          --direction=INGRESS || echo "Firewall rule already exists or other error"
+    
+    - name: Copy application files
+      run: |
+        gcloud compute scp --recurse --zone=us-central1-a src tests requirements.txt whisper-dev:~/whisper-app/
+    
+    - name: Setup application on VM
+      run: |
+        gcloud compute ssh whisper-dev --zone=us-central1-a --command="
+          sudo apt-get update && \
+          sudo apt-get install -y ffmpeg && \
+          cd ~/whisper-app && \
+          python -m pip install --upgrade pip && \
+          pip install -r requirements.txt && \
+          echo 'Setup complete!'
+        "
+    
+    - name: Start API service
+      run: |
+        gcloud compute ssh whisper-dev --zone=us-central1-a --command="
+          cd ~/whisper-app && \
+          tmux new-session -d -s whisper 'python -m src.api'
+        "
+        
+        echo "API service started. You can access it at: http://$(gcloud compute instances describe whisper-dev --zone=us-central1-a --format='value(networkInterfaces[0].accessConfigs[0].natIP)'):8000"
