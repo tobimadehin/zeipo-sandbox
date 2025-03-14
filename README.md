@@ -26,29 +26,37 @@ This repository contains the Whisper speech recognition integration for Zeipo.ai
 
 3. Build the Docker image:
    ```
-   ./scripts/run-whisper.ps1 build
+   ./zeipo.ps1 build
    ```
+
+4. Set up the `zeipo` command for easier access:
+   ```
+   ./zeipo.ps1 setup
+   ```
+   After running this command, restart your PowerShell session or reload your profile with `. $PROFILE`
 
 ### Basic Usage
 
 Run a basic test to verify everything is working:
 ```
-./scripts/run-whisper.ps1 test
+zeipo test
 ```
 
 Transcribe an audio file:
 ```
-./scripts/run-whisper.ps1 transcribe data/samples/english_sample.mp3 --model small
+zeipo transcribe data/samples/english_sample.mp3 --model small
 ```
 
 Start the API server:
 ```
-./scripts/run-whisper.ps1 api
+zeipo api
 ```
 
-Run benchmarks:
+The API will be available at: http://localhost:8000
+
+Test GPU access in container:
 ```
-./scripts/run-whisper.ps1 benchmark
+zeipo gpu
 ```
 
 ## Project Structure
@@ -69,7 +77,7 @@ Run benchmarks:
 ### Running Tests
 
 ```
-./scripts/run-whisper.ps1 python -m unittest discover tests
+zeipo python -m unittest discover tests
 ```
 
 ### API Documentation
@@ -77,6 +85,26 @@ Run benchmarks:
 When the API server is running, you can access the interactive documentation at:
 ```
 http://localhost:8000/docs
+```
+
+### Shell Access and Container Management
+
+Open a bash shell in the container:
+```
+zeipo bash
+```
+
+View container logs:
+```
+zeipo logs
+# With follow option
+zeipo logs -f
+```
+
+Start/stop the container:
+```
+zeipo start
+zeipo stop
 ```
 
 ### Google Cloud Deployment
@@ -120,30 +148,26 @@ Now that you have created all the necessary files, follow these steps to get you
    ./scripts/download-samples.ps1
 
    # Build the Docker environment
-   ./scripts/run-whisper.ps1 build
+   zeipo build
    ```
 
 3. Test your environment:
 
    ```powershell
    # Run basic tests
-   ./scripts/run-whisper.ps1 test
+   zeipo test
 
    # Try transcribing a file
-   ./scripts/run-whisper.ps1 transcribe data/samples/english_sample.mp3 --model tiny
+   zeipo transcribe data/samples/english_sample.mp3 --model tiny
    ```
 
 4. Start the API server and explore the interactive documentation:
 
    ```powershell
-   ./scripts/run-whisper.ps1 api
+   zeipo api
    ```
 
    Then open your browser to `http://localhost:8000/docs`
-
-Here's a more generic version of your text:
-
----
 
 ### What Makes This Project Unique   
 
