@@ -120,7 +120,7 @@ switch ($Command) {
         Write-ZeipoMessage "API will be available at: http://localhost:8000" -Color Green
         
         # Start the API with explicit 0.0.0.0 binding to allow external connections
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper python -m src.api"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev src/api.py"
     }
     
     "test" {
