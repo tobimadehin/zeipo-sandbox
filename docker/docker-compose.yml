@@ -7,7 +7,9 @@ services:
       - ..:/app
     ports:
       - "8000:8000"
+    runtime: nvidia
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
       - PYTHONPATH=/app
     deploy:
       resources:
