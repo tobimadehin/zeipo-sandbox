@@ -1,7 +1,7 @@
 # app/api/system.py 
 import torch
 from static.constants import logger
-from main import router
+from src.api.router import router
 
 # Get available device - Enhanced with better diagnostic logging
 def get_device():

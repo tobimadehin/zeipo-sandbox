@@ -51,3 +51,6 @@ temp/
 *.m4a
 *.json
 !.github/workflows/*.json
+
+# sqlite
+*.db

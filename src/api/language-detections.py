@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import CallSession, LanguageDetection
-from ...main import router
+from src.api.router import router
 
 class LanguageDetectionRequest(BaseModel):
     session_id: str

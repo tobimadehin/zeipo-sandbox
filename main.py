@@ -1,13 +1,11 @@
 # app/main.py
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 import torch
 from db.session import create_db_and_tables
 from src.api import audio, calls, transcriptions
 from config import settings
 
 app = FastAPI(title="Zeipo.ai API")
-
-router = APIRouter(settings.API_V1_STR)
 
 @app.on_event("startup")
 def startup_event():

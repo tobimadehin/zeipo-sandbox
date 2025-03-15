@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import CallSession, Transcription
-from ...main import router
+from src.api.router import router
 
 class TranscriptionSegment(BaseModel):
     session_id: str
