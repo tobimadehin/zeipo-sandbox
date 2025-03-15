@@ -53,6 +53,31 @@ function Test-DockerWsl {
     }
 }
 
+# Add this after other function definitions
+function Convert-ToContainerPath {
+    param (
+        [string]$Path
+    )
+    
+    # Normalize path separators
+    $Path = $Path.Replace('\', '/')
+    
+    # Remove ./ prefix if present
+    if ($Path.StartsWith('./')) {
+        $Path = $Path.Substring(2)
+    } elseif ($Path.StartsWith('.')) {
+        $Path = $Path.Substring(1)
+    }
+    
+    # Check if it's already an absolute path in container format
+    if ($Path.StartsWith('/app/') -or $Path.StartsWith('/')) {
+        return $Path
+    }
+    
+    # For relative paths, just prepend /app/
+    return "/app/$Path"
+}
+
 # Execute WSL command
 function Invoke-WslCommand {
     param (
@@ -92,6 +117,7 @@ switch ($Command) {
         Write-Host "  test        - Run Whisper tests"
         Write-Host "  transcribe  - Transcribe an audio file (zeipo transcribe sample.mp3 [--model small])"
         Write-Host "  build       - Build or rebuild the Docker image"
+        Write-Host "  clean       - Clean up corrupted model files"
         Write-Host "  start       - Start the Docker container"
         Write-Host "  stop        - Stop the Docker container"
         Write-Host "  bash        - Open a bash shell in the container"
@@ -136,15 +162,43 @@ switch ($Command) {
     
     "transcribe" {
         Write-ZeipoMessage "Transcribing audio..."
-        $args = $RemainingArgs -join " "
+        
+        # Process the first argument (file path) separately
+        $filePath = $null
+        $otherArgs = @()
+        
+        if ($RemainingArgs.Count -gt 0) {
+            $filePath = Convert-ToContainerPath -Path $RemainingArgs[0]
+            $otherArgs = $RemainingArgs[1..($RemainingArgs.Count-1)]
+        }
+        
+        $argsStr = ($otherArgs -join " ")
         
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing transcription..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.transcribe $args"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.transcribe $filePath $argsStr"
     }
-    
+
+    "clean" {
+        Write-ZeipoMessage "Cleaning up cached Whisper models..." -Color Yellow
+        
+        # Start container if not running
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        
+        # Clean Whisper cache directory
+        Write-ZeipoMessage "Removing cached Whisper models..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper rm -rf ~/.cache/whisper/*"
+        
+        # Verify cleanup
+        Write-ZeipoMessage "Verifying cleanup..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper ls -la ~/.cache/whisper/ || mkdir -p ~/.cache/whisper/"
+        
+        Write-ZeipoMessage "Cleanup completed successfully." -Color Green
+    }
+        
     "build" {
         Write-ZeipoMessage "Building Docker image..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && DOCKER_BUILDKIT=1 docker-compose -f '$wslComposeFile' build --progress=plain"
