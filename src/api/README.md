@@ -4,7 +4,7 @@
 ## Example endpoint
 
 ```
-POST /api/v1/calls/start
+POST /api/v1/calls
 ```
 Start a new call session.
 
