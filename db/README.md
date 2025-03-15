@@ -1,3 +1,4 @@
 # Relationships
 
-![alt text](../static/db-schema.jpg)
+![alt text](../static/db-schema.png)
+![alt text](image.png)
