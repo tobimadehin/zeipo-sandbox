@@ -1,18 +1,11 @@
 import whisper
 import torch
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union, Callable
+from typing import Dict, Optional, Callable
 import threading
 import queue
 import time
-import logging
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("whisper-streaming")
+from static.constants import logger
 
 class WhisperStreamingTranscriber:
     """

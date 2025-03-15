@@ -1,7 +1,7 @@
 # app/api/system.py 
 import torch
-from constants import logger
-from ...main import router
+from static.constants import logger
+from main import router
 
 # Get available device - Enhanced with better diagnostic logging
 def get_device():
@@ -58,3 +58,4 @@ async def gpu_info():
     except Exception as e:
         return {"status": "Error getting GPU info", "error": str(e)}
     
+DEVICE = get_device()    

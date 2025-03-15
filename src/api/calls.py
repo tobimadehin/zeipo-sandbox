@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from db.session import get_db
 from db.models import Customer, CallSession
 import uuid
-from ...main import router
+from main import router
 
 class CallRequest(BaseModel):
     phone_number: str

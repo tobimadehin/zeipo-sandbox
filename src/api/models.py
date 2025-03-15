@@ -4,12 +4,11 @@ from typing import Dict
 import torch
 import whisper
 
-from constants import AVAILABLE_MODELS, logger
-from src.api.system import get_device
+from src.api.system import DEVICE
+from static.constants import AVAILABLE_MODELS, logger
 from ...main import router
 
 models: Dict[str, whisper.Whisper] = {}
-DEVICE = get_device()
 
 def get_model(name: str):
     """Load and cache the requested model."""
@@ -31,7 +30,7 @@ async def list_models():
     """List available models and their status."""
     # Existing models code from api.py
     return {
-        "available_models": ["tiny", "base", "small", "medium", "large"],
+        "available_models": AVAILABLE_MODELS,
         "loaded_models": {},
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "cuda_available": torch.cuda.is_available()

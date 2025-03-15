@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 import whisper
 import tempfile
 import os
-from constants import AVAILABLE_MODELS, logger
+from static.constants import AVAILABLE_MODELS, logger
 from db.session import get_db
 from src.api.models import get_model
-from ...main import router
+from main import router
 
 async def process_audio(file_path: str, model_name: str, task: str, language: Optional[str] = None):
     """Process audio file with Whisper."""
