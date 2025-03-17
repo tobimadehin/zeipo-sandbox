@@ -89,6 +89,79 @@ function Invoke-WslCommand {
     return $LASTEXITCODE
 }
 
+# Function to check if Cloudflare CLI is installed
+function Test-CloudflareCLI {
+    try {
+        $cloudflared = Get-Command cloudflared -ErrorAction SilentlyContinue
+        if ($null -eq $cloudflared) {
+            Write-ZeipoMessage "Cloudflare Tunnel CLI (cloudflared) is not installed." -Color Red
+            Write-ZeipoMessage "Please download it from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/" -Color Yellow
+            return $false
+        }
+        return $true
+    }
+    catch {
+        Write-ZeipoMessage "Error checking Cloudflare CLI: $_" -Color Red
+        return $false
+    }
+}
+
+# Function to start a Cloudflare tunnel
+function Start-CloudflareTunnel {
+    param (
+        [int]$Port = 8000
+    )
+    
+    try {
+        # Check if cloudflared is already running
+        $process = Get-Process cloudflared -ErrorAction SilentlyContinue
+        if ($process) {
+            Write-ZeipoMessage "Cloudflare Tunnel is already running. Stopping it..." -Color Yellow
+            Stop-Process -Name cloudflared -Force
+            Start-Sleep -Seconds 2
+        }
+        
+        # Start Cloudflare tunnel in a new PowerShell window
+        Write-ZeipoMessage "Starting Cloudflare Tunnel..." -Color Cyan
+        Start-Process powershell -ArgumentList "-Command", "cloudflared tunnel --url http://localhost:$Port --logfile cloudflared.log" -WindowStyle Minimized
+        
+        # Wait for tunnel to initialize
+        Write-ZeipoMessage "Waiting for Cloudflare Tunnel to initialize..." -Color Yellow
+        Start-Sleep -Seconds 5
+        
+        # Get the tunnel URL from logs
+        $logPath = Join-Path $projectRoot "cloudflared.log"
+        $maxAttempts = 10
+        $attempt = 0
+        $tunnelUrl = $null
+        
+        while ($attempt -lt $maxAttempts) {
+            if (Test-Path $logPath) {
+                $logContent = Get-Content $logPath -Raw
+                if ($logContent -match "https://.*\.trycloudflare\.com") {
+                    $tunnelUrl = $Matches[0]
+                    break
+                }
+            }
+            
+            $attempt++
+            Start-Sleep -Seconds 1
+        }
+        
+        if ($null -eq $tunnelUrl) {
+            Write-ZeipoMessage "Failed to get Cloudflare Tunnel URL from logs." -Color Red
+            return $null
+        }
+        
+        Write-ZeipoMessage "Cloudflare Tunnel URL: $tunnelUrl" -Color Green
+        return $tunnelUrl
+    }
+    catch {
+        Write-ZeipoMessage "Error starting Cloudflare Tunnel: $_" -Color Red
+        return $null
+    }
+}
+
 # Get project root in WSL format
 $wslProjectRoot = $projectRoot.ToString().Replace("\", "/").Replace("C:", "/mnt/c").Replace("D:", "/mnt/d")
 Write-Host "Using WSL path: $wslProjectRoot"
@@ -99,7 +172,7 @@ $wslComposeFile = $composeFile.ToString().Replace("\", "/").Replace("C:", "/mnt/
 Write-Host "Using WSL compose path: $wslComposeFile"
 
 # Check Docker and WSL before executing commands
-if ($Command -ne "help" -and $Command -ne "version") {
+if ($Command -ne "help" -and $Command -ne "version" -and $Command -ne "voice") {
     $dockerWslOk = Test-DockerWsl
     if (-not $dockerWslOk) {
         Write-ZeipoMessage "Cannot continue without Docker and WSL working properly." -Color Red
@@ -116,13 +189,15 @@ switch ($Command) {
         Write-Host "  api         - Start the Whisper API server"
         Write-Host "  test        - Run Whisper tests"
         Write-Host "  transcribe  - Transcribe an audio file (zeipo transcribe sample.mp3 [--model small])"
+        Write-Host "  voice       - Start with Africa's Talking integration"
         Write-Host "  build       - Build or rebuild the Docker image"
         Write-Host "  clean       - Clean up corrupted model files"
         Write-Host "  start       - Start the Docker container"
         Write-Host "  stop        - Stop the Docker container"
         Write-Host "  bash        - Open a bash shell in the container"
         Write-Host "  python      - Run a Python command in the container"
-        Write-Host "  logs        - View Docker container logs"
+        Write-Host "  logs        - View services/api logs"
+        Write-Host "  calls       - View recent call logs"
         Write-Host "  gpu         - Test GPU access"
         Write-Host "  version     - Show version information"
         Write-Host "  setup       - Setup the zeipo command for easier access"
@@ -215,6 +290,14 @@ switch ($Command) {
         Write-ZeipoMessage "Stopping container..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' down"
         Write-ZeipoMessage "Container stopped." -Color Green
+        
+        # Also stop any running Cloudflare tunnels
+        $process = Get-Process cloudflared -ErrorAction SilentlyContinue
+        if ($process) {
+            Write-ZeipoMessage "Stopping Cloudflare Tunnel..." -Color Yellow
+            Stop-Process -Name cloudflared -Force
+            Write-ZeipoMessage "Cloudflare Tunnel stopped." -Color Green
+        }
     }
     
     "bash" {
@@ -248,6 +331,22 @@ switch ($Command) {
             Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' logs"
         }
     }
+
+    # Add this as a new case in the switch statement in zeipo.ps1
+    "calls" {
+        Write-ZeipoMessage "Viewing call logs..." -Color Cyan
+        
+        # Get arguments to pass to the call logs script
+        $args = $RemainingArgs -join " "
+        
+        # Start container if not running
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        
+        # Run the call logs viewer script
+        Write-ZeipoMessage "Fetching call logs..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tools.call_logs $args"
+    }
     
     "gpu" {
         Write-Host "Testing GPU access directly in WSL..." -ForegroundColor Cyan
@@ -258,9 +357,81 @@ switch ($Command) {
     }
     
     "version" {
-        $version = "0.0.1" # You can read this from a version file if available
+        $version = "0.0.2" 
         Write-ZeipoMessage "Zeipo Tools version $version" -Color Green
-        Write-ZeipoMessage "Whisper Sandbox Integration" -Color Green
+        Write-ZeipoMessage "Whisper Sandbox Integration with Africa's Talking Support" -Color Green
+    }
+    
+    "voice" {
+        Write-ZeipoMessage "Starting Zeipo with Africa's Talking integration..." -Color Cyan
+        
+        # Check if Cloudflare CLI is installed
+        $cloudflareOk = Test-CloudflareCLI
+        if (-not $cloudflareOk) {
+            Write-ZeipoMessage "Please install Cloudflare Tunnel CLI (cloudflared) to continue." -Color Red
+            exit 1
+        }
+        
+        # Start container first
+        Write-ZeipoMessage "Starting Docker container..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        
+        # Start Cloudflare tunnel
+        $tunnelUrl = Start-CloudflareTunnel -Port 8000
+        if ($null -eq $tunnelUrl) {
+            Write-ZeipoMessage "Failed to start Cloudflare Tunnel. Cannot continue." -Color Red
+            exit 1
+        }
+        
+        # Update the .env file with the tunnel URL
+        $envPath = Join-Path $projectRoot ".env"
+        if (Test-Path $envPath) {
+            $envContent = Get-Content $envPath
+            
+            if ($envContent -match "WEBHOOK_URL=") {
+                $envContent = $envContent -replace "WEBHOOK_URL=.*", "WEBHOOK_URL=$tunnelUrl"
+            } else {
+                $envContent += "`nWEBHOOK_URL=$tunnelUrl"
+            }
+            
+            Set-Content -Path $envPath -Value $envContent
+            Write-ZeipoMessage "Updated .env file with Cloudflare Tunnel URL" -Color Green
+        } else {
+            Write-ZeipoMessage "Error: .env file not found in $envPath" -Color Red
+            Write-ZeipoMessage "Please create an .env file with your configuration before running this command." -Color Yellow
+        }
+        
+        # Get API prefix from env file
+        $apiV1Str = "/api/v1"
+        if (Test-Path $envPath) {
+            $envContent = Get-Content $envPath
+            if ($envContent -match "API_V1_STR=(.*)") {
+                $apiV1Str = $matches[1]
+            }
+        }
+        
+        # Calculate Africa's Talking webhook URLs
+        $voiceWebhookUrl = "$tunnelUrl$apiV1Str/at/voice"
+        $eventsWebhookUrl = "$tunnelUrl$apiV1Str/at/events"
+        $dtmfWebhookUrl = "$tunnelUrl$apiV1Str/at/dtmf"
+        
+        Write-Host "`nAfrica's Talking Webhook URLs:" -ForegroundColor Yellow
+        Write-Host "Voice URL: $voiceWebhookUrl" -ForegroundColor Cyan
+        Write-Host "Events URL: $eventsWebhookUrl" -ForegroundColor Cyan
+        Write-Host "DTMF URL: $dtmfWebhookUrl" -ForegroundColor Cyan
+        
+        Write-Host "`nImportant: Update your Africa's Talking voice service with these webhook URLs" -ForegroundColor Yellow
+        Write-Host "1. Log in to your Africa's Talking Console" -ForegroundColor White
+        Write-Host "2. Go to Voice > Settings" -ForegroundColor White
+        Write-Host "3. Configure the following URLs:" -ForegroundColor White
+        Write-Host "   - Incoming Call URL: $voiceWebhookUrl" -ForegroundColor White
+        Write-Host "   - Events Callback URL: $eventsWebhookUrl" -ForegroundColor White
+        Write-Host "   - DTMF Callback URL: $dtmfWebhookUrl" -ForegroundColor White
+        Write-Host "4. Save your changes" -ForegroundColor White
+        
+        # Start the API server with Africa's Talking integration
+        Write-ZeipoMessage "Starting API server with Africa's Talking integration..." -Color Green
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
     }
     
     "setup" {

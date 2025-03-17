@@ -3,6 +3,7 @@ from fastapi import FastAPI
 import torch
 from db.session import create_db_and_tables
 from src.api import audio, calls, transcriptions
+from src.api.integrations import at_integration 
 from config import settings
 
 app = FastAPI(title="Zeipo.ai API")
@@ -10,6 +11,9 @@ app = FastAPI(title="Zeipo.ai API")
 @app.on_event("startup")
 def startup_event():
     create_db_and_tables()
+    # Create logs directory
+    import os
+    os.makedirs("logs/calls", exist_ok=True)
 
 # Root endpoint from original api.py
 @app.get("/")
@@ -32,3 +36,4 @@ async def root():
 app.include_router(calls.router, prefix=settings.API_V1_STR)
 app.include_router(transcriptions.router, prefix=settings.API_V1_STR)
 app.include_router(audio.router, prefix=settings.API_V1_STR)
+app.include_router(at_integration.router, prefix=settings.API_V1_STR)

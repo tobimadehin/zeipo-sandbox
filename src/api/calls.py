@@ -23,35 +23,6 @@ class CallResponse(BaseModel):
     class Config:
         orm_mode = True
 
-@router.post("/calls", response_model=CallResponse)
-def start_call(call_req: CallRequest, db: Session = Depends(get_db)):
-    # Get or create customer
-    customer = db.query(Customer).filter(Customer.phone_number == call_req.phone_number).first()
-    
-    if not customer:
-        customer = Customer(
-            phone_number=call_req.phone_number,
-            last_activity=datetime.now()
-        )
-        db.add(customer)
-        db.flush()
-    else:
-        customer.last_activity = datetime.now()
-    
-    # Create call session
-    session_id = call_req.session_id or str(uuid.uuid4())
-    call_session = CallSession(
-        session_id=session_id,
-        customer_id=customer.id,
-        start_time=datetime.now()
-    )
-    
-    db.add(call_session)
-    db.commit()
-    db.refresh(call_session)
-    
-    return call_session
-
 @router.get("/calls", response_model=list[CallResponse])
 def list_calls(db: Session = Depends(get_db)):
     calls = db.query(CallSession).all()
