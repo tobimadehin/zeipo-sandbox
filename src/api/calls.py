@@ -22,13 +22,15 @@ class CallResponse(BaseModel):
 
     class Config:
         orm_mode = True
+        
+router.prefix = "/calls"
 
-@router.get("/calls", response_model=list[CallResponse])
+@router.get("/", response_model=list[CallResponse])
 def list_calls(db: Session = Depends(get_db)):
     calls = db.query(CallSession).all()
     return calls
 
-@router.get("/calls/{session_id}", response_model=CallResponse)
+@router.get("/{session_id}", response_model=CallResponse)
 def get_call(session_id: str, db: Session = Depends(get_db)):
     call_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
 
@@ -37,7 +39,7 @@ def get_call(session_id: str, db: Session = Depends(get_db)):
     
     return call_session
 
-@router.patch("/calls/{session_id}")
+@router.patch("/{session_id}")
 def end_call(
     session_id: str, 
     recording_url: Optional[str] = None, 

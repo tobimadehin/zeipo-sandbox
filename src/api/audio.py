@@ -11,6 +11,8 @@ from db.session import get_db
 from src.api.models import get_model
 from src.api.router import router
 
+router.prefix = "/audios"
+
 async def process_audio(file_path: str, model_name: str, task: str, language: Optional[str] = None):
     """Process audio file with Whisper."""
     try:

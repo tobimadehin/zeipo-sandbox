@@ -3,7 +3,7 @@ from fastapi import FastAPI
 import torch
 from db.session import create_db_and_tables
 from src.api import audio, calls, transcriptions
-from src.api.integrations import at_integration 
+from src.api.integrations import at 
 from config import settings
 
 app = FastAPI(title="Zeipo.ai API")
@@ -36,4 +36,4 @@ async def root():
 app.include_router(calls.router, prefix=settings.API_V1_STR)
 app.include_router(transcriptions.router, prefix=settings.API_V1_STR)
 app.include_router(audio.router, prefix=settings.API_V1_STR)
-app.include_router(at_integration.router, prefix=settings.API_V1_STR)
+app.include_router(at.router, prefix=settings.API_V1_STR)

@@ -1,4 +1,4 @@
-# app/src/api/integrations/at_integration.py
+# app/src/api/integrations/at.py
 from fastapi import APIRouter, Depends, Request, Form, Response
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
@@ -13,12 +13,14 @@ from db.models import Customer, CallSession
 from src.utils import log_call_to_file
 from src.utils.helpers import gen_uuid_12
 from static.constants import logger
-from src.api.router import router
+from . import router
 from src.utils.at_utils import log_call_to_file
 
 # Initialize Africa's Talking SDK
 africastalking.initialize(settings.AT_USER, settings.AT_API_KEY)
 voice = africastalking.Voice
+
+router.prefix = "/at"
 
 # Helper function to build Africa's Talking Voice XML
 def build_voice_response(say_text=None, play_url=None, get_digits=None, record=False, **kwargs):
@@ -97,7 +99,6 @@ def build_voice_response(say_text=None, play_url=None, get_digits=None, record=F
     return response
 
 # Webhook for incoming voice calls
-@router.post("/voice")
 @router.post("/voice")
 async def voice_webhook(
     request: Request,

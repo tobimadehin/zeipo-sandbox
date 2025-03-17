@@ -3,7 +3,8 @@ import torch
 from static.constants import logger
 from src.api.router import router
 
-# Get available device - Enhanced with better diagnostic logging
+router.prefix = "/system"
+
 def get_device():
     """Detect and configure the optimal device with detailed logging."""
     try:
@@ -30,7 +31,7 @@ def get_device():
         return "cpu"
 
 
-@router.get("/system/gpu")
+@router.get("/gpu")
 async def gpu_info():
     """Detailed information about available GPU resources."""
     # Existing GPU info code from api.py

@@ -10,6 +10,8 @@ from src.api.router import router
 
 models: Dict[str, whisper.Whisper] = {}
 
+router.prefix = "/models"
+
 def get_model(name: str):
     """Load and cache the requested model."""
     if name not in AVAILABLE_MODELS:
@@ -25,7 +27,7 @@ def get_model(name: str):
     return models[name]
 
 
-@router.get("/models")
+@router.get("/")
 async def list_models():
     """List available models and their status."""
     # Existing models code from api.py

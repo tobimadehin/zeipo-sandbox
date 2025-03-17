@@ -6,7 +6,7 @@ import json
 from main import app
 from xml.etree import ElementTree as ET
 
-from src.api.integrations.at_integration import build_voice_response
+from src.api.integrations.at import build_voice_response
 from src.utils.helpers import gen_uuid_12
 
 client = TestClient(app)
