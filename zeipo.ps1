@@ -189,7 +189,7 @@ switch ($Command) {
         Write-Host "  api         - Start the Whisper API server"
         Write-Host "  test        - Run Whisper tests"
         Write-Host "  transcribe  - Transcribe an audio file (zeipo transcribe sample.mp3 [--model small])"
-        Write-Host "  voice       - Start with Africa's Talking integration"
+        Write-Host "  voice       - Start voice channel"
         Write-Host "  build       - Build or rebuild the Docker image"
         Write-Host "  clean       - Clean up corrupted model files"
         Write-Host "  start       - Start the Docker container"
@@ -200,7 +200,7 @@ switch ($Command) {
         Write-Host "  calls       - View recent call logs"
         Write-Host "  gpu         - Test GPU access"
         Write-Host "  version     - Show version information"
-        Write-Host "  setup       - Setup the zeipo command for easier access"
+        Write-Host "  setup       - Setup the zeipo cli for easier access"
     }
     
     "api" {
@@ -232,6 +232,8 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing tests..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_at $args"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_steaming $args"
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_whisper $args"
     }
     
@@ -430,7 +432,7 @@ switch ($Command) {
         Write-Host "4. Save your changes" -ForegroundColor White
         
         # Start the API server with Africa's Talking integration
-        Write-ZeipoMessage "Starting API server with Africa's Talking integration..." -Color Green
+        Write-ZeipoMessage "Starting API server..." -Color Green
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
     }
     

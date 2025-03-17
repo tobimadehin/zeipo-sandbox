@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     AT_API_KEY: str = ""
     AT_PHONE: str = ""
 
-    WEBHOOK_BASE_URL: str = "http://localhost:8000"
+    WEBHOOK_URL: str = "http://localhost:8000"
     
     class Config:
         env_file = ".env"

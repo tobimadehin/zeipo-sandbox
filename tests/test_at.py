@@ -18,7 +18,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         """Test the voice webhook endpoint."""
         # Simulate an Africa's Talking voice webhook call
         response = client.post(
-            "/api/v1/at/voice",
+            "/api/v1/integrations/at/voice",
             data={
                 "sessionId": "AT_TEST_123456789",
                 "callerNumber": "+2347012345678",
@@ -48,7 +48,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         """Test the events webhook endpoint."""
         # Create a test call first
         client.post(
-            "/api/v1/at/voice",
+            "/api/v1/integrations/at/voice",
             data={
                 "sessionId": "AT_EVENT_TEST_123",
                 "callerNumber": "+2347087654321",
@@ -59,7 +59,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         
         # Now simulate an events callback
         response = client.post(
-            "/api/v1/at/events",
+            "/api/v1/integrations/at/events",
             data={
                 "sessionId": "AT_EVENT_TEST_123",
                 "status": "completed",
@@ -75,7 +75,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
     def test_dtmf_webhook(self):
         """Test the DTMF webhook endpoint."""
         response = client.post(
-            "/api/v1/at/dtmf",
+            "/api/v1/integrations/at/dtmf",
             data={
                 "sessionId": "AT_DTMF_TEST_123",
                 "dtmfDigits": "12345",
@@ -95,13 +95,14 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         """Test that calls are logged to files."""
         # Generate a unique call SID for this test
         test_session_id = f"AT_LOG_TEST_{gen_uuid_12()}"
+        phone = "+2347055551234"
         
         # Simulate a call
         client.post(
-            "/api/v1/at/voice",
+            "/api/integrations/v1/at/voice",
             data={
                 "sessionId": test_session_id,
-                "callerNumber": "+2347055551234",
+                "callerNumber": phone,
                 "direction": "inbound",
                 "isActive": "1",
             }
@@ -117,7 +118,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         
         # Verify log data
         self.assertEqual(log_data["call_sid"], test_session_id)
-        self.assertEqual(log_data["phone_number"], "+2347055551234")
+        self.assertEqual(log_data["phone_number"], phone)
     
     def test_voice_xml_generation(self):
         """Test XML generation functions."""
