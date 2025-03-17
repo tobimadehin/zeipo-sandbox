@@ -17,17 +17,71 @@ Start a new call session.
 ```
 
 ```
-POST /api/v1/calls/end/{session_id}
+GET /api/v1/calls/{session_id}
 ```
-End an existing call session.
+Retrieve an existing call with session id.
 
 **Query Parameters:**
 - `recording_url` (optional): URL to recording
 - `escalated` (optional): Whether call was escalated to human
 
+## Africa's Talking Integration
+
+The API now includes integration with Africa's Talking Voice services, allowing for inbound and outbound call handling, DTMF processing, and call event management.
+
+### Voice Webhooks
+
+```
+POST /api/v1/voice
+```
+Primary webhook for handling incoming voice calls from Africa's Talking.
+
+**Form Parameters:**
+- `sessionId`: The unique session ID for the call
+- `callerNumber`: The phone number of the caller
+- `direction`: Direction of the call (inbound/outbound)
+- `isActive`: Whether the call is active
+
+```
+POST /api/v1/dtmf
+```
+Webhook for handling DTMF (keypad) input from callers.
+
+**Form Parameters:**
+- `sessionId`: The unique session ID for the call
+- `dtmfDigits`: The digits entered by the caller
+
+```
+POST /api/v1/events
+```
+Webhook for handling call events like hangup, transfer, etc.
+
+**Form Parameters:**
+- `sessionId`: The unique session ID for the call
+- `status`: Current status of the call
+- `durationInSeconds`: Duration of the call in seconds (for completed calls)
+
+### Configuration
+
+To use the Africa's Talking integration:
+
+1. Set up your Africa's Talking account credentials in the `.env` file:
+   ```
+   AT_USER=your_username
+   AT_API_KEY=your_api_key
+   AT_PHONE=your_phone_number
+   ```
+
+2. Configure your webhook URLs in the Africa's Talking dashboard:
+   - Voice URL: `{your_base_url}/api/v1/voice`
+   - Events URL: `{your_base_url}/api/v1/events`
+   - DTMF URL: `{your_base_url}/api/v1/dtmf`
+
+3. For local development, use the `zeipo voice` command to set up a Cloudflare tunnel with public URLs.
+
 ## Response Formats
 
-All API responses are in JSON format.
+All API responses are in JSON format, except for Voice API webhooks which return XML.
 
 ### Transcription Response Example
 
@@ -51,6 +105,15 @@ All API responses are in JSON format.
 }
 ```
 
+### Voice Webhook Response Example
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Welcome to Zeipo AI. Your call has been received and is being processed.</Say>
+</Response>
+```
+
 ## Development Tools
 
 Use the `zeipo` cli for common operations:
@@ -65,11 +128,17 @@ zeipo build
 # Start the API server
 zeipo api
 
+# Start with Africa's Talking integration and Cloudflare tunnel
+zeipo voice
+
 # Test GPU access
 zeipo gpu
 
 # Run tests
 zeipo test
+
+# View recent call logs
+zeipo calls
 
 # Help and information
 zeipo help
