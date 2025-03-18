@@ -25,7 +25,7 @@ Content-Type: application/json
 
 {
   "text": "I need help with my payment",
-  "session_id": "call_12345678"
+  "session_id": "N8hX5XK0V2vj"
 }
 ```
 
@@ -43,7 +43,7 @@ Content-Type: application/json
     "AMOUNT": ["$50.00"]
   },
   "response": "I can help with payment-related questions. What would you like to know about your payment?",
-  "session_id": "call_12345678",
+  "session_id": "N8hX5XK0V2vj",
   "text": "I need help with my payment"
 }
 ```

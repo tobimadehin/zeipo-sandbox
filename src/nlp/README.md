@@ -76,11 +76,12 @@ Serves as the central orchestration point, coordinating the NLP pipeline and dat
 
 The NLP system integrates with other components through:
 
-1. **API Endpoints**: Primarily through `/api/v1/nlu/process` for direct text processing.
+1. **API Endpoints**: Primarily through `/api/v1/nlu` for direct text processing.
 
 2. **Africa's Talking Integration**: The voice webhook processes initial greetings and subsequent utterances.
 
-3. **Database Models**: Uses `CallIntent`, `Intent`, and `Entity` models for persistence.
+3. **Database Models**: Uses `CallIntent`, `Intent`, and `Entity` models for persistence. 
+[ [Database Models](../../db/models.py) ].
 
 ## Extending the System
 
