@@ -30,7 +30,7 @@ class NLUResponse(BaseModel):
 
 router.prefix = "/nlu"
 
-@router.post("/process", response_model=NLUResponse)
+@router.post("/", response_model=NLUResponse)
 async def process_text(
     request: NLURequest,
     db: Session = Depends(get_db)

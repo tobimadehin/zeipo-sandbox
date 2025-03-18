@@ -40,3 +40,13 @@ app.include_router(audio.router, prefix=settings.API_V1_STR)
 app.include_router(at.router, prefix=settings.API_V1_STR)
 app.include_router(intent_understanding.router, prefix=settings.API_V1_STR)
 app.include_router(websockets.router, prefix=settings.API_V1_STR)
+
+# Register the startup and shutdown events
+@app.on_event("startup")
+async def startup_websocket_manager():
+    await websockets.start_cleanup_task()
+
+@app.on_event("shutdown")
+async def shutdown_websocket_manager():
+    await websockets.stop_cleanup_task()
+

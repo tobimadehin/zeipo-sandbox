@@ -86,14 +86,13 @@ async def websocket_audio_endpoint(
         if connection_id:
             await stream_manager.disconnect(connection_id)
 
-# Start the cleanup task when the module is loaded
-@router.on_startup
-async def startup_event():
+# Function to start cleanup task
+async def start_cleanup_task():
     global cleanup_task
     cleanup_task = asyncio.create_task(stream_manager.cleanup_stale_connections())
 
-@router.on_shutdown
-async def shutdown_event():
+# Function to stop cleanup task
+async def stop_cleanup_task():
     global cleanup_task
     if cleanup_task:
         cleanup_task.cancel()
