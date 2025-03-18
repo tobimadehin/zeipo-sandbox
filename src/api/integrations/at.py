@@ -156,7 +156,7 @@ async def voice_webhook(
         
         # Generate XML response
         xml_response = build_voice_response(
-            say_text="Welcome to Zeipo AI. Your call has been received and is being processed. Thank you for calling Zeipo AI. This is a prototype demonstration."
+            say_text="Welcome to Zeipo AI. How can I help you today?"
         )
         
     except Exception as e:

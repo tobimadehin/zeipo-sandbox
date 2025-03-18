@@ -2,7 +2,8 @@
 from fastapi import FastAPI
 import torch
 from db.session import create_db_and_tables
-from src.api import audio, calls, transcriptions
+from src.nlu import intent_understanding
+from src.api import audio, calls, transcriptions, websockets
 from src.api.integrations import at 
 from config import settings
 
@@ -37,3 +38,5 @@ app.include_router(calls.router, prefix=settings.API_V1_STR)
 app.include_router(transcriptions.router, prefix=settings.API_V1_STR)
 app.include_router(audio.router, prefix=settings.API_V1_STR)
 app.include_router(at.router, prefix=settings.API_V1_STR)
+app.include_router(intent_understanding.router, prefix=settings.API_V1_STR)
+app.include_router(websockets.router, prefix=settings.API_V1_STR)
