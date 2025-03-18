@@ -3,7 +3,7 @@ import numpy as np
 import time
 import os
 import whisper
-from src.streaming import WhisperStreamingTranscriber
+from src.streaming.whisper_streaming import WhisperStreamingTranscriber
 
 class TestWhisperStreaming(unittest.TestCase):
     """Test the WhisperStreamingTranscriber class."""
