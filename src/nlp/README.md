@@ -119,3 +119,5 @@ Planned improvements:
 - Context-aware response generation
 - Sentiment analysis
 - Multilingual support
+
+For more detailed information about the implementation of the NLP components in the NLU system, please refer to the [NLU README](../nlu/README.md).
