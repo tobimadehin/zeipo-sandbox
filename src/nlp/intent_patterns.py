@@ -36,6 +36,7 @@ INTENT_PATTERNS: Dict[IntentType, List[Pattern]] = {
         re.compile(r'\b(?:how\s+(?:do|can|could)\s+I|what\s+(?:is|are)|where\s+(?:is|are)|when\s+(?:is|are)|who\s+(?:is|are)|why\s+(?:is|are))\b', re.IGNORECASE),
         # Explicit information requests
         re.compile(r'\b(?:tell\s+me\s+about|explain|describe|inquiry|enquiry|information\s+on)\b', re.IGNORECASE),
+        re.compile(r'\b(?:what|where|when|who|why)\s+(?:is|are|does|do)\s+(?!payment)'),
     ],
     IntentType.HELP: [
         # Direct help requests

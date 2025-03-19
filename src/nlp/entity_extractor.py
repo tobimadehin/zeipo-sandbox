@@ -58,25 +58,78 @@ ENTITY_PATTERNS = {
         re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'),
     ],
 
+    EntityType.AMOUNT: [
+        # Global currency symbols (before number)
+        re.compile(r'[$€£¥₹₦฿₺₩ر؋฿]\s*\d+(?:\.\d{1,2})?'),
+        
+        # African-specific currencies
+        re.compile(r'''
+            (?:  # Symbols
+                R\s*|\u20A8|            # South African Rand (R), CFA Franc (₨)
+                GH₵|                    # Ghanaian Cedi
+                [FD]?\s*CFA|            # West/East African CFA
+                د\.?\s*ج|               # Algerian Dinar (دج)
+                د\.?\s*م|               # Moroccan Dirham (د.م)
+                ج\s*\.?\s*م|            # Egyptian Pound (ج.م)
+                Db|                      # Libyan Dinar (LD)
+                S?R                     # Ethiopian Birr (Br)
+            )\s*\d+[\d,.]*
+        ''', re.IGNORECASE | re.VERBOSE),
+        
+        # Middle East symbols (before)
+        re.compile(r'''
+            (?:ر\.\s*س|                 # Saudi Riyal (ر.س)
+            د\.\s*إ|                   # UAE Dirham (د.إ)
+            ع\.\s*د|                   # Bahraini Dinar (ع.د)
+            ر\.\s*ق|                   # Qatari Riyal (ر.ق)
+            د\.\s*ع|                   # Iraqi Dinar (د.ع)
+            ﷼|                         # Iran/Iraq Dinar (﷼)
+            ₪                          # Israeli Shekel
+            )\s*\d+[\d,.]*
+        ''', re.IGNORECASE | re.VERBOSE),
+
+        # Currency codes (global)
+        re.compile(r'\b(?:USD|EUR|GBP|JPY|CNY|INR|'
+                r'ZAR|KES|NGN|EGP|MAD|DZD|TND|LYD|SDG|ETB|GHS|RWF|UGX|'
+                r'AED|SAR|QAR|OMR|KWD|BHD|YER|JOD|LBP|TRY|IRR|IQD|SYP)\s*\d+'
+                r'(?:\.\d{1,2})?\b', re.IGNORECASE),
+
+        # Amounts with currency names (global)
+        re.compile(r'\b\d+(?:\.\d{1,2})?\s+'
+                r'(?:dollars|euros|pounds|naira|rand|cedi|shillings|dirhams|riyals|'
+                r'dinars|birr|shekels|riels|meticals|ouguiyas|kwanzas|leones|'
+                r'pulas|lilangeni)\b', re.IGNORECASE),
+
+        # Middle Eastern names
+        re.compile(r'\b\d+\s+'
+                r'(?:riyals|dinars|shekels|rials|manats|kurus|'
+                r'qirsh|fils|halala|baiza)\b', re.IGNORECASE),
+        
+        # Local number formats (commas as thousand separators)
+        re.compile(r'[\d{1,3},]+(?:\.\d{1,2})?\s*'
+                r'(?:دينار|درهم|ريال|شيكل|ليرة)', re.IGNORECASE)
+    ],
+    
     EntityType.PERCENTAGE: [
-        re.compile(r'\b\d+(?:\.\d+)?\s*%\b'),
-        re.compile(r'\b\d+(?:\.\d+)?\s+percent\b', re.IGNORECASE),
+        re.compile(r'\b\d+(?:\.\d+)?%\b'),  # Captures "25%" with or without space
+        re.compile(r'\b(\d+(?:\.\d+)?)\s+percent\b', re.IGNORECASE),  # Captures "25 percent"
     ],
     
     EntityType.NUMBER: [
-        re.compile(r'\b\d+\b'),
-    ],
-    
-    EntityType.AMOUNT: [
-        # Currency amounts with symbols
-        re.compile(r'\$\s*\d+(?:\.\d{1,2})?'),
-        re.compile(r'\£\s*\d+(?:\.\d{1,2})?'),
-        re.compile(r'\€\s*\d+(?:\.\d{1,2})?'),
-        re.compile(r'\₦\s*\d+(?:\.\d{1,2})?'),
-        
-        # Currency amounts with names
-        re.compile(r'\b\d+(?:\.\d{1,2})?\s+(?:dollars|euros|pounds|naira)\b', re.IGNORECASE),
-        re.compile(r'\b(?:USD|EUR|GBP|NGN)\s*\d+(?:\.\d{1,2})?\b'),
+        re.compile(
+            r'''
+            (?<![$€£¥₹₦])       # Negative lookbehind for currency symbols
+            \b\d+(?:\.\d+)?\b   # Match whole numbers or decimals
+            (?!                 # Negative lookahead for:
+                \s*             # Optional whitespace
+                (?:%|percent|   # Percent indicators
+                [$€£¥₹₦]|     # Currency symbols
+                (?:dollars|euros|pounds|naira|shillings|rand|cedi|dirhams|riyals)  # Currency names
+                )
+            )
+            ''', 
+            re.IGNORECASE | re.VERBOSE
+        ),
     ],
     
     EntityType.DURATION: [

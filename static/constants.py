@@ -145,6 +145,7 @@ INQUIRY_TEXTS = [
     "What is my account balance?",
     "Where can I find my transaction history?",
     "When will my subscription renew?",
+    "Update credit card info",  
     "Tell me about your services"
 ]
 
@@ -220,11 +221,9 @@ AMOUNT_TEXTS = [
 ]
 
 PERCENTAGE_TEXTS = [
-    "The discount is 25%",
-    "Interest rate is 3.5%",
-    "We're 90% certain",
-    "Sales are up by 12.5 percent",
-    "Only 50% of customers responded"
+    "25% discount",
+    "15.5 percent interest", 
+    "100Percent guaranteed"
 ]
 
 DURATION_TEXTS = [

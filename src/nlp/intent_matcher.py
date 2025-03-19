@@ -39,9 +39,9 @@ class IntentMatcher:
                 matches = pattern.findall(text)
                 if matches:
                     # Score based on match count and text coverage
-                    match_score = min(len(matches) * 0.2, 0.6)  # Cap at 0.6 for multiple matches
+                    match_score = min(len(matches) * 0.3, 0.7)  # Cap at 0.6 for multiple matches
                     coverage = sum(len(match) for match in matches) / max(len(text), 1)
-                    score = max(score, match_score + (coverage * 0.3))  # Max 0.9
+                    score = max(score, match_score + (coverage * 0.2))  # Max 0.9
                     
             if score > 0:
                 intent_scores[intent_type] = score
