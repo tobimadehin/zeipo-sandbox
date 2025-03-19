@@ -99,7 +99,7 @@ class TestAfricasTalkingIntegration(unittest.TestCase):
         
         # Simulate a call
         client.post(
-            "/api/integrations/v1/at/voice",
+            "/api/v1/integrations/at/voice",
             data={
                 "sessionId": test_session_id,
                 "callerNumber": phone,

@@ -1,9 +1,9 @@
 # app/api/system.py 
 import torch
 from static.constants import logger
-from src.api.router import router
+from src.api.router import create_router
 
-router.prefix = "/system"
+router = create_router("/system")
 
 def get_device():
     """Detect and configure the optimal device with detailed logging."""

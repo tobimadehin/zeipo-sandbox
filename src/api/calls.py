@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from db.session import get_db
 from db.models import Customer, CallSession
 import uuid
-from src.api.router import router
+from src.api.router import create_router
 
 class CallRequest(BaseModel):
     phone_number: str
@@ -22,8 +22,8 @@ class CallResponse(BaseModel):
 
     class Config:
         orm_mode = True
-        
-router.prefix = "/calls"
+
+router = create_router("/calls")
 
 @router.get("/", response_model=list[CallResponse])
 def list_calls(db: Session = Depends(get_db)):

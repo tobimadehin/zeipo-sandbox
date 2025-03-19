@@ -224,17 +224,64 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
     }
     
-    "test" {
-        Write-ZeipoMessage "Running Whisper tests..."
-        $args = $RemainingArgs -join " "
-        
+    "test-all" {
+        Write-ZeipoMessage "Running all tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
-        
-        Write-ZeipoMessage "Executing tests..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_at $args"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_steaming $args"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_whisper $args"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m unittest discover tests"
+    }
+
+    "test-at" {
+        Write-ZeipoMessage "Running Africa's Talking tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_at"
+    }
+
+    "test-api" {
+        Write-ZeipoMessage "Running API tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_api"
+    }
+
+    "test-whisper" {
+        Write-ZeipoMessage "Running Whisper tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_whisper"
+    }
+
+    "test-streaming" {
+        Write-ZeipoMessage "Running streaming tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_steaming"
+    }
+
+    "test-nlp" {
+        Write-ZeipoMessage "Running NLP tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_nlp"
+    }
+
+    "test-nlu" {
+        Write-ZeipoMessage "Running NLU tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_nlu"
+    }
+
+    "test" {
+        Write-ZeipoMessage "Available test commands:" -Color Cyan
+        Write-Host "  zeipo test-all       Run all tests" 
+        Write-Host "  zeipo test-at        Test Africa's Talking integration"
+        Write-Host "  zeipo test-api       Test API endpoints"
+        Write-Host "  zeipo test-whisper   Test Whisper functionality"
+        Write-Host "  zeipo test-streaming Test streaming transcription"
+        Write-Host "  zeipo test-nlp       Test NLP components" 
+        Write-Host "  zeipo test-nlu       Test NLU API"
     }
     
     "transcribe" {

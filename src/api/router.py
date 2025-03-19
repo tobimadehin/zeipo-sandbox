@@ -1,5 +1,7 @@
-# src/api/router.py
+# In src/api/router.py
 from fastapi import APIRouter
 from config import settings
 
-router = APIRouter(prefix=settings.API_V1_STR)
+def create_router(prefix_path=""):
+    """Create a new router with the API prefix."""
+    return APIRouter(prefix=prefix_path)

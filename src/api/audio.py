@@ -9,9 +9,9 @@ import os
 from static.constants import AVAILABLE_MODELS, logger
 from db.session import get_db
 from src.api.models import get_model
-from src.api.router import router
+from src.api.router import create_router
 
-router.prefix = "/audios"
+router = create_router("/audios")
 
 async def process_audio(file_path: str, model_name: str, task: str, language: Optional[str] = None):
     """Process audio file with Whisper."""

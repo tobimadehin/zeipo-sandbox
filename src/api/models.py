@@ -6,11 +6,11 @@ import whisper
 
 from src.api.system import DEVICE
 from static.constants import AVAILABLE_MODELS, logger
-from src.api.router import router
+from src.api.router import create_router
 
 models: Dict[str, whisper.Whisper] = {}
 
-router.prefix = "/models"
+router = create_router("/models")
 
 def get_model(name: str):
     """Load and cache the requested model."""

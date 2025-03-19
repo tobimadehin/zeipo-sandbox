@@ -10,7 +10,7 @@ from db.models import CallSession
 from static.constants import logger
 from src.streaming.audio_streaming import AudioStreamManager
 from src.nlp.intent_processor import IntentProcessor
-from src.api.router import router
+from src.api.router import create_router
 
 # Create audio stream manager
 stream_manager = AudioStreamManager()
@@ -21,7 +21,7 @@ intent_processor = IntentProcessor()
 # Start background task for cleanup
 cleanup_task = None
 
-router.prefix = "/ws"
+router = create_router("/ws")
 
 @router.websocket("/audio/{session_id}")
 async def websocket_audio_endpoint(

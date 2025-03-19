@@ -5,14 +5,16 @@ from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import CallSession, LanguageDetection
-from src.api.router import router
+from src.api.router import create_router
 
 class LanguageDetectionRequest(BaseModel):
     session_id: str
     language: str
     confidence: float
+    
+router = create_router("/language-detections")
 
-@router.post("/language-detection")
+@router.post("/")
 def detect_language(detection: LanguageDetectionRequest, db: Session = Depends(get_db)):
     call_session = db.query(CallSession).filter(CallSession.session_id == detection.session_id).first()
     

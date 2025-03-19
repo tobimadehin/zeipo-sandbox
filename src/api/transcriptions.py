@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import CallSession, Transcription
-from src.api.router import router
+from src.api.router import create_router
 
 class TranscriptionSegment(BaseModel):
     session_id: str
@@ -14,8 +14,10 @@ class TranscriptionSegment(BaseModel):
     speaker: str
     segment_start_time: float
     segment_end_time: Optional[float] = None
+    
+router = create_router("/transcriptions")
 
-@router.post("/transcriptions")
+@router.post("/")
 def add_transcription(segment: TranscriptionSegment, db: Session = Depends(get_db)):
     call_session = db.query(CallSession).filter(CallSession.session_id == segment.session_id).first()
     

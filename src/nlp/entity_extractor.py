@@ -57,6 +57,11 @@ ENTITY_PATTERNS = {
     EntityType.EMAIL: [
         re.compile(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'),
     ],
+
+    EntityType.PERCENTAGE: [
+        re.compile(r'\b\d+(?:\.\d+)?\s*%\b'),
+        re.compile(r'\b\d+(?:\.\d+)?\s+percent\b', re.IGNORECASE),
+    ],
     
     EntityType.NUMBER: [
         re.compile(r'\b\d+\b'),
@@ -72,11 +77,6 @@ ENTITY_PATTERNS = {
         # Currency amounts with names
         re.compile(r'\b\d+(?:\.\d{1,2})?\s+(?:dollars|euros|pounds|naira)\b', re.IGNORECASE),
         re.compile(r'\b(?:USD|EUR|GBP|NGN)\s*\d+(?:\.\d{1,2})?\b'),
-    ],
-    
-    EntityType.PERCENTAGE: [
-        re.compile(r'\b\d+(?:\.\d+)?\s*%\b'),
-        re.compile(r'\b\d+(?:\.\d+)?\s+percent\b', re.IGNORECASE),
     ],
     
     EntityType.DURATION: [

@@ -129,3 +129,108 @@ COMPOUND_RESPONSE_TEMPLATES = {
         "I'd be happy to answer questions about your payment. What would you like to know specifically?",
     ],
 }
+
+
+# For unit testing
+GREETING_TEXTS = [
+    "Hello there",
+    "Hi, how are you?",
+    "Good morning",
+    "Hey, what's up?",
+    "Greetings"
+]
+
+INQUIRY_TEXTS = [
+    "How do I reset my password?",
+    "What is my account balance?",
+    "Where can I find my transaction history?",
+    "When will my subscription renew?",
+    "Tell me about your services"
+]
+
+PAYMENT_TEXTS = [
+    "I want to pay my bill",
+    "How do I make a payment?",
+    "I'd like to update my payment method",
+    "When is my next invoice due?",
+    "What's my subscription plan?"
+]
+
+HELP_TEXTS = [
+    "I need help",
+    "Can you assist me?",
+    "I'm having a problem",
+    "Support please",
+    "I need assistance with my account"
+]
+
+UNKNOWN_TEXTS = [
+    "asdf qwerty",
+    "1234567890",
+    "...",
+    "",
+    None
+]
+
+COMPOUND_TEXTS = [
+    ("I need help with my account", IntentType.HELP),
+    ("How do I reset my account password?", IntentType.INQUIRY),
+    ("Help me make a payment", IntentType.HELP),
+    ("What payment methods do you accept?", IntentType.INQUIRY)
+]
+
+DATE_TEXTS = [
+    "I want to schedule an appointment for 01/15/2023",
+    "My payment is due on January 15, 2023",
+    "The deadline is 15/01/23",
+    "Let's meet next Monday",
+    "I requested this yesterday"
+]
+
+TIME_TEXTS = [
+    "The meeting is scheduled for 3:30pm",
+    "I'll call you at 14:45",
+    "Let's meet at noon",
+    "The office closes at 5:00 PM",
+    "My appointment is at 10.30"
+]
+
+PHONE_TEXTS = [
+    "My number is +1 555-123-4567",
+    "You can reach me at (555) 123-4567",
+    "Call me on 08012345678",
+    "My contact is +44 20 1234 5678",
+    "Dial 555-123-4567"
+]
+
+EMAIL_TEXTS = [
+    "My email is user@example.com",
+    "Send it to test.user@domain.co.uk",
+    "Contact me at first.last+tag@subdomain.example.org",
+    "Email user_name@example.com with any questions",
+    "support@company.africa is our helpdesk"
+]
+
+AMOUNT_TEXTS = [
+    "The bill is $50.00",
+    "I paid £25",
+    "The item costs €19.99",
+    "The fee is ₦5000",
+    "My balance is 100 dollars"
+]
+
+PERCENTAGE_TEXTS = [
+    "The discount is 25%",
+    "Interest rate is 3.5%",
+    "We're 90% certain",
+    "Sales are up by 12.5 percent",
+    "Only 50% of customers responded"
+]
+
+DURATION_TEXTS = [
+    "The call lasted 5 minutes",
+    "It takes 2 hours",
+    "Wait for 30 seconds",
+    "The project will take 3 weeks",
+    "The subscription is for 1 year"
+]
