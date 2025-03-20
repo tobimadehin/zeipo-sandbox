@@ -1,4 +1,4 @@
-# app/api/transcriptions.py
+# app/api/stt.py
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -15,7 +15,7 @@ class TranscriptionSegment(BaseModel):
     segment_start_time: float
     segment_end_time: Optional[float] = None
     
-router = create_router("/transcriptions")
+router = create_router("/stt")
 
 @router.post("/")
 def add_transcription(segment: TranscriptionSegment, db: Session = Depends(get_db)):

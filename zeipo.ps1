@@ -188,7 +188,8 @@ switch ($Command) {
         Write-Host "Commands:" -ForegroundColor Cyan
         Write-Host "  api         - Start the Whisper API server"
         Write-Host "  test        - Run Whisper tests"
-        Write-Host "  transcribe  - Transcribe an audio file (zeipo transcribe sample.mp3 [--model small])"
+        Write-Host "  stt         - Transcribe an audio file (zeipo stt sample.mp3 [--model small])"
+        Write-Host "  tts         - Generate speech from text"
         Write-Host "  voice       - Start voice channel"
         Write-Host "  build       - Build or rebuild the Docker image"
         Write-Host "  clean       - Clean up corrupted model files"
@@ -245,11 +246,18 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_api"
     }
 
-    "test-whisper" {
+    "test-stt" {
         Write-ZeipoMessage "Running Whisper tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_whisper"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_stt"
+    }
+
+    "test-tts" {
+        Write-ZeipoMessage "Running Google TTS tests..." -Color Yellow
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m tests.test_tts"
     }
 
     "test-streaming" {
@@ -278,13 +286,14 @@ switch ($Command) {
         Write-Host "  zeipo test-all       Run all tests" 
         Write-Host "  zeipo test-at        Test Africa's Talking integration"
         Write-Host "  zeipo test-api       Test API endpoints"
-        Write-Host "  zeipo test-whisper   Test Whisper functionality"
+        Write-Host "  zeipo test-stt       Test Whisper functionality"
+        Write-Host "  zeipo test-tts       Test Google TTS functionality"
         Write-Host "  zeipo test-streaming Test streaming transcription"
         Write-Host "  zeipo test-nlp       Test NLP components" 
         Write-Host "  zeipo test-nlu       Test NLU API"
     }
     
-    "transcribe" {
+    "stt" {
         Write-ZeipoMessage "Transcribing audio..."
         
         # Process the first argument (file path) separately
@@ -302,7 +311,77 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing transcription..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.transcribe $filePath $argsStr"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.stt $filePath $argsStr"
+    }
+
+    "tts" {
+        Write-ZeipoMessage "Available tts commands:" -Color Cyan
+        Write-Host "  zeipo tts-voices     List available TTS voices" 
+        Write-Host "  zeipo tts-speak      Generate speech from text (zeipo tts-speak 'Hello world' [--voice en-US-Neural2-F])"
+        Write-Host "  zeipo test-api       Test API endpoints"
+    }
+
+    "tts-voices" {
+        Write-ZeipoMessage "Listing available TTS voices..." -Color Cyan
+        
+        # Get language filter if provided
+        $language = $null
+        if ($RemainingArgs.Count -gt 0) {
+            $language = $RemainingArgs[0]
+        }
+        
+        # Start container if needed
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        
+        # Make API request to list voices
+        $languageParam = if ($language) { "?language_code=$language" } else { "" }
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper curl -s 'http://localhost:8000/api/v1/tts/voices$languageParam' | python -m json.tool"
+    }
+
+    "tts-speak" {
+        Write-ZeipoMessage "Generating speech from text..." -Color Cyan
+        
+        # Get text and optional parameters
+        if ($RemainingArgs.Count -lt 1) {
+            Write-ZeipoMessage "Error: Text to speak is required." -Color Red
+            Write-ZeipoMessage "Usage: zeipo tts-speak 'Hello world' [--voice en-US-Neural2-F] [--language en-US]" -Color Yellow
+            exit 1
+        }
+        
+        $text = $RemainingArgs[0]
+        $voice = $null
+        $language = $null
+        
+        # Parse remaining args for voice and language
+        for ($i = 1; $i -lt $RemainingArgs.Count; $i++) {
+            if ($RemainingArgs[$i] -eq "--voice" -and $i+1 -lt $RemainingArgs.Count) {
+                $voice = $RemainingArgs[$i+1]
+                $i++
+            }
+            elseif ($RemainingArgs[$i] -eq "--language" -and $i+1 -lt $RemainingArgs.Count) {
+                $language = $RemainingArgs[$i+1]
+                $i++
+            }
+        }
+        
+        # Start container if needed
+        Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
+        
+        # Build API request
+        $curlCmd = "curl -s -X POST 'http://localhost:8000/api/v1/tts/synthesize"
+        $curlCmd += "?text=" + [uri]::EscapeDataString($text)
+        if ($voice) {
+            $curlCmd += "&voice_id=" + [uri]::EscapeDataString($voice)
+        }
+        if ($language) {
+            $curlCmd += "&language_code=" + [uri]::EscapeDataString($language)
+        }
+        $curlCmd += "' | python -m json.tool"
+        
+        # Make API request to synthesize speech
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper bash -c '$curlCmd'"
     }
 
     "clean" {

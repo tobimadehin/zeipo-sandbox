@@ -1,4 +1,4 @@
-# src/streaming/whisper_streaming.py
+# src/stt/stt_base.py
 import whisper
 import torch
 import numpy as np
@@ -8,7 +8,7 @@ import queue
 import time
 from static.constants import logger
 
-class WhisperStreamingTranscriber:
+class STTProvider:
     """
     A class to handle streaming transcription with Whisper.
     """

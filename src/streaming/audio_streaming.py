@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from db.models import CallSession
 from src.utils.helpers import gen_uuid_16
 from static.constants import RECORDING_DIR, logger
-from src.streaming.whisper_streaming import WhisperStreamingTranscriber
+from src.stt.stt_base import STTProvider
 
 class AudioStreamManager:
     """
@@ -58,7 +58,7 @@ class AudioStreamManager:
         wf.setframerate(16000)  # 16 kHz
         
         # Initialize streaming transcriber
-        transcriber = WhisperStreamingTranscriber(
+        transcriber = STTProvider(
             model_name=model_name,
             language=language,
             chunk_size_ms=1000,

@@ -1,4 +1,5 @@
 # app/src/api/integrations/at.py
+import os
 from fastapi import APIRouter, Depends, Request, Form, Response
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
@@ -10,8 +11,9 @@ import json
 from config import settings
 from db.session import get_db
 from db.models import Customer, CallSession
+from src.tts import get_tts_provider
 from src.utils import log_call_to_file
-from src.utils.helpers import gen_uuid_12
+from src.utils.helpers import gen_uuid_12, gen_uuid_16
 from static.constants import logger
 from src.api.router import create_router
 from src.utils.at_utils import log_call_to_file
@@ -40,8 +42,37 @@ def build_voice_response(say_text=None, play_url=None, get_digits=None, record=F
     response = '<?xml version="1.0" encoding="UTF-8"?><Response>'
     
     if say_text:
-        # Add playText action
-        response += f'<Say>{say_text}</Say>'
+        # Check if TTS is enabled
+        if settings.GOOGLE_TTS_ENABLED and kwargs.get("use_tts", True):
+            try:
+                # Generate TTS audio
+                tts_provider = get_tts_provider()
+                audio_content = tts_provider.synthesize(
+                    say_text, 
+                    voice_id=kwargs.get("voice_id"),
+                    language_code=kwargs.get("language_code")
+                )
+                
+                # Save to file
+                filename = f"tts_{gen_uuid_16().hex}.mp3"
+                output_dir = "data/tts_output"
+                os.makedirs(output_dir, exist_ok=True)
+                file_path = os.path.join(output_dir, filename)
+                
+                tts_provider.save_to_file(audio_content, file_path)
+                
+                # Use the webhook base URL to create a public URL
+                audio_url = f"{settings.WEBHOOK_URL}{settings.API_V1_STR}/tts/audio/{filename}"
+                
+                # Use Play instead of Say for TTS audio
+                response += f'<Play url="{audio_url}"/>'
+            except Exception as e:
+                logger.error(f"Error using TTS in AT response: {str(e)}")
+                # Fallback to Say if TTS fails
+                response += f'<Say>{say_text}</Say>'
+        else:
+            # Use regular Say for AT text-to-speech
+            response += f'<Say>{say_text}</Say>'
     
     if play_url:
         # Add Play action

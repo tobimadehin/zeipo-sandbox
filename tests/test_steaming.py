@@ -3,7 +3,7 @@ import numpy as np
 import time
 import os
 import whisper
-from src.streaming.whisper_streaming import WhisperStreamingTranscriber
+from src.stt.stt_base import STTProvider
 
 class TestWhisperStreaming(unittest.TestCase):
     """Test the WhisperStreamingTranscriber class."""
@@ -17,7 +17,7 @@ class TestWhisperStreaming(unittest.TestCase):
         audio = whisper.load_audio(audio_path)
         
         # Create streaming transcriber with tiny model for speed
-        transcriber = WhisperStreamingTranscriber(
+        transcriber = STTProvider(
             model_name="tiny",
             chunk_size_ms=1000,
             buffer_size_ms=5000

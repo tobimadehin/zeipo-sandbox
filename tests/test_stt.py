@@ -5,7 +5,7 @@ import os
 import time
 import numpy as np
 
-class TestWhisperSetup(unittest.TestCase):
+class TestSTT(unittest.TestCase):
     """Test basic Whisper functionality."""
     
     def test_whisper_import(self):
