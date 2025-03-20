@@ -2,13 +2,9 @@ import unittest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 from datetime import datetime
-import json
-import os
 import tempfile
 
 from main import app
-from db.models import CallSession, Customer, Intent
-from static.constants import logger
 
 client = TestClient(app)
 

@@ -17,7 +17,7 @@ class GoogleTTSProvider(TTSProvider):
     def __init__(self):
         """Initialize the Google TTS client and cache."""
         self.client = texttospeech.TextToSpeechClient()
-        self.cache = TTSAudioCache(settings.GOOGLE_TTS_CACHE_DIR)
+        self.cache = TTSAudioCache(settings.TTS_CACHE_DIR)
         self.default_language = settings.GOOGLE_TTS_DEFAULT_VOICE_LOCALE
         self.default_voice = settings.GOOGLE_TTS_DEFAULT_VOICE_NAME
         
@@ -83,7 +83,7 @@ class GoogleTTSProvider(TTSProvider):
             # Save to cache
             audio_content = response.audio_content
             cache_file = os.path.join(
-                settings.GOOGLE_TTS_CACHE_DIR,
+                settings.TTS_CACHE_DIR,
                 f"tts_{gen_uuid_16().hex}.mp3"
             )
             with open(cache_file, 'wb') as f:

@@ -1,12 +1,8 @@
 # src/api/websockets.py
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from typing import Optional, Dict
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Optional
 import asyncio
-import base64
 
-from db.session import get_db
-from db.models import CallSession
 from static.constants import logger
 from src.streaming.audio_streaming import AudioStreamManager
 from src.nlp.intent_processor import IntentProcessor

@@ -1,5 +1,5 @@
 # src/tts/voice_profiles.py
-from typing import Dict, List, Optional
+from typing import Dict
 from enum import Enum
 
 class VoiceGender(Enum):

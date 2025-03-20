@@ -3,8 +3,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 import os
 import tempfile
-import json
-from io import BytesIO
 
 # Import the TTS components to test
 from src.tts import get_tts_provider
@@ -12,9 +10,8 @@ from src.tts.tts_base import TTSProvider
 from src.tts.integrations.google_tts import GoogleTTSProvider
 from src.tts.audio_cache import TTSAudioCache
 from src.tts.voice_profiles import get_voice_for_language, AFRICAN_VOICE_PROFILES
-from config import settings
 
-class TestGoogleTTS(unittest.TestCase):
+class TestTTS(unittest.TestCase):
     """Test the Google TTS functionality."""
     
     def setUp(self):

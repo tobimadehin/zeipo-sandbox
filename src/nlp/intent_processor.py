@@ -1,14 +1,12 @@
 # src/nlp/intent_processor.py
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime
+from typing import Dict, Tuple, Any
 from sqlalchemy.orm import Session
 
 from .intent_matcher import IntentMatcher
-from .entity_extractor import EntityExtractor, EntityType
+from .entity_extractor import EntityExtractor
 from .response_templates import ResponseGenerator
-from .intent_patterns import IntentType
 
-from db.models import CallSession, Customer, CallIntent, Intent, Entity
+from db.models import CallSession, CallIntent, Intent, Entity
 from static.constants import logger
 from db.session import SessionLocal
 

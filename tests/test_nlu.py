@@ -1,13 +1,8 @@
 import unittest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
-from datetime import datetime
 
 from main import app
-from db.models import CallSession, Customer
-from src.nlp.intent_patterns import IntentType
-from src.nlp.entity_extractor import EntityType
-from src.nlu.intent_understanding import intent_processor
 
 client = TestClient(app)
 

@@ -1,14 +1,13 @@
 # src/api/tts.py
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict, Any
+from typing import Optional
 import os
 import uuid
 
 from db.session import get_db
 from src.tts import get_tts_provider
-from config import settings
 from static.constants import logger
 from src.api.router import create_router
 

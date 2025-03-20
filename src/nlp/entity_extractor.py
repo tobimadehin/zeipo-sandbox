@@ -1,8 +1,6 @@
 # src/nlp/entity_extractor.py
 import re
-from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
-import calendar
+from typing import Dict, List, Tuple
 from enum import Enum, auto
 
 class EntityType(Enum):

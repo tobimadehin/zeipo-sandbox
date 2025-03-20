@@ -1,12 +1,11 @@
 # src/api/nlu/intent_understanding.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Dict, Optional, List, Any
+from typing import Dict, List, Any
 from pydantic import BaseModel
 
 from db.session import get_db
 from db.models import CallSession
-from static.constants import logger
 from src.nlp.intent_processor import IntentProcessor
 from src.api.router import create_router
 

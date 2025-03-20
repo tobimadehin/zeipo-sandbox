@@ -1,6 +1,6 @@
 # src/nlp/intent_patterns.py
 import re
-from typing import Dict, List, Tuple, Pattern
+from typing import Dict, List, Pattern
 from enum import Enum, auto
 
 class IntentType(Enum):

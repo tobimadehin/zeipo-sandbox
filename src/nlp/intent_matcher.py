@@ -1,8 +1,6 @@
 # src/nlp/intent_matcher.py
-from typing import Dict, List, Tuple, Optional, Any
-import re
+from typing import Dict, List, Tuple
 from .intent_patterns import IntentType, INTENT_PATTERNS, COMPOUND_PATTERNS
-from static.constants import logger
 
 class IntentMatcher:
     """Class for matching intents in text using regex patterns."""

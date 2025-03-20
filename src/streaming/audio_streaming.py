@@ -1,16 +1,12 @@
 # src/streaming/audio_streaming.py
 import os
-import time
-import uuid
 import asyncio
 import numpy as np
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, Optional, Any
 from datetime import datetime
 import wave
-from fastapi import WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from fastapi import WebSocket
 
-from db.models import CallSession
 from src.utils.helpers import gen_uuid_16
 from static.constants import RECORDING_DIR, logger
 from src.stt.stt_base import STTProvider

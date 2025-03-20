@@ -6,8 +6,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from db.session import get_db
-from db.models import Customer, CallSession
-import uuid
+from db.models import CallSession
 from src.api.router import create_router
 
 class CallRequest(BaseModel):
