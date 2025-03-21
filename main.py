@@ -4,8 +4,7 @@ import torch
 from db.session import create_db_and_tables
 from src.api import stt
 from src.nlu import intent_understanding
-from src.api import calls, stt, system, tts, websockets
-from src.api.integrations import at 
+from src.api import calls, stt, system, tts, websockets, telephony
 from config import settings
 
 app = FastAPI(title="Zeipo.ai API")
@@ -38,7 +37,7 @@ async def root():
 app.include_router(calls.router, prefix=settings.API_V1_STR)
 app.include_router(stt.router, prefix=settings.API_V1_STR)
 app.include_router(stt.router, prefix=settings.API_V1_STR)
-app.include_router(at.router, prefix=settings.API_V1_STR)
+app.include_router(telephony.router, prefix=settings.API_V1_STR)
 app.include_router(intent_understanding.router, prefix=settings.API_V1_STR)
 app.include_router(system.router, prefix=settings.API_V1_STR)
 app.include_router(websockets.router, prefix=settings.API_V1_STR)

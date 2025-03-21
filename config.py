@@ -5,9 +5,14 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./zeipo.db"
     API_V1_STR: str = "/api/v1"
     
+    TELEPHONY_PROVIDER: str = "africas_talking"
+    DEFAULT_TELEPHONY_PROVIDER: str = "voip_simulator"
+    
     AT_USER: str = "sandbox"  
     AT_API_KEY: str = ""
     AT_PHONE: str = ""
+    
+    VOIP_SIMULATOR_ENABLED: bool = True
 
     WEBHOOK_URL: str = "http://localhost:8000"
     
