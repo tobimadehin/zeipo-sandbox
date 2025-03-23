@@ -156,13 +156,15 @@ class STTProvider:
                         self.processed_chunks += 1
                         
                     except Exception as e:
-                        logger.error(f"Error processing chunk: {str(e)}")
+                        logger.error(f"Error processing chunk: {str(e)}", exc_info=True)
                 
                 # Mark task as done
                 self.audio_queue.task_done()
                 
+                logger.debug(f"Processed {self.processed_chunks} chunks of size {len(self.audio_buffer)} from buffer")
+                
             except Exception as e:
-                logger.error(f"Error in streaming process: {str(e)}")
+                logger.error(f"Error in streaming process: {str(e)}", exc_info=True)
                 if self.is_running:
                     time.sleep(0.1)  # Prevent tight loop on error
         

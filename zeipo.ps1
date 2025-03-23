@@ -33,30 +33,76 @@ function Write-ZeipoMessage {
 
 # Verify Docker and WSL are running
 function Test-DockerWsl {
+    param (
+        [switch]$ForceRestart
+    )
+    
     try {
-        $wsl = wsl -- echo "WSL is working"
+        # First check if WSL is working
+        $wsl = wsl -- echo "WSL is working" 2>&1
         if ($wsl -ne "WSL is working") {
             Write-ZeipoMessage "WSL is not responding correctly" -Color Red
             return $false
         }
         
+        # If force restart is requested, kill Docker processes first
+        if ($ForceRestart) {
+            Write-ZeipoMessage "Force restart requested. Stopping Docker in WSL..." -Color Yellow
+            wsl -- bash -c "sudo killall -9 dockerd containerd docker-proxy 2>/dev/null || true"
+            Start-Sleep -Seconds 2
+        }
+        
+        # Check if Docker is running and responsive
         $docker = wsl -- docker ps 2>&1
-        if ($LASTEXITCODE -ne 0) {
+        $dockerRunning = $LASTEXITCODE -eq 0
+        
+        # Additional deeper check in case Docker appears running but isn't working
+        if ($dockerRunning) {
+            $deepCheck = wsl -- bash -c "docker info >/dev/null 2>&1 || echo 'docker_not_responsive'"
+            if ($deepCheck -eq "docker_not_responsive") {
+                Write-ZeipoMessage "Docker appears to be running but is not responsive. Attempting restart..." -Color Yellow
+                $dockerRunning = $false
+            }
+        }
+        
+        if (-not $dockerRunning) {
             Write-ZeipoMessage "Docker is not running in WSL. Attempting to start..." -Color Yellow
+            
+            # Kill any existing Docker processes that might be stuck
+            wsl -- bash -c "sudo killall -9 dockerd containerd docker-proxy 2>/dev/null || true"
+            Start-Sleep -Seconds 2
+            
+            # Start Docker daemon in WSL with proper detachment
             try {
-                wsl -- sudo dockerd > /dev/null 2>&1 &
-                Start-Sleep -Seconds 3
+                # Use nohup to ensure the process continues after the WSL session ends
+                wsl -- bash -c "sudo nohup dockerd > /dev/null 2>&1 &"
+                Write-ZeipoMessage "Waiting for Docker to initialize..." -Color Yellow
+                Start-Sleep -Seconds 5
+                
+                # Verify Docker is now running
                 $docker = wsl -- docker ps 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    Write-ZeipoMessage "Failed to start Docker in WSL" -Color Red
-                    return $false
+                    # Try one more time with direct command
+                    Write-ZeipoMessage "First attempt failed. Trying alternative method..." -Color Yellow
+                    wsl -- sudo dockerd > /dev/null 2>&1 &
+                    Start-Sleep -Seconds 5
+                    $docker = wsl -- docker ps 2>&1
+                    
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-ZeipoMessage "Failed to start Docker in WSL" -Color Red
+                        return $false
+                    }
                 }
+                
+                Write-ZeipoMessage "Docker started successfully" -Color Green
             }
             catch {
                 Write-ZeipoMessage "Error starting Docker: $_" -Color Red
                 return $false
             }
         }
+        
+        Write-ZeipoMessage "Docker is running properly in WSL" -Color Green
         return $true
     }
     catch {
@@ -139,7 +185,7 @@ function Start-CloudflareTunnel {
         
         # Wait for tunnel to initialize
         Write-ZeipoMessage "Waiting for Cloudflare Tunnel to initialize..." -Color Yellow
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 15
         
         # Get the tunnel URL from logs
         $logPath = Join-Path $projectRoot "cloudflared.log"
@@ -149,7 +195,7 @@ function Start-CloudflareTunnel {
         
         while ($attempt -lt $maxAttempts) {
             if (Test-Path $logPath) {
-                $logContent = Get-Content $logPath -Raw
+                $logContent = Get-Content $logPath -Tail 20 | Out-String
                 if ($logContent -match "https://.*\.trycloudflare\.com") {
                     $tunnelUrl = $Matches[0]
                     break
@@ -172,6 +218,96 @@ function Start-CloudflareTunnel {
         Write-ZeipoMessage "Error starting Cloudflare Tunnel: $_" -Color Red
         return $null
     }
+}
+
+# Function to clear port conflicts in both Windows and WSL
+function Clear-PortConflicts {
+    param (
+        [int]$Port = 8000,
+        [int]$WaitSeconds = 3
+    )
+    
+    Write-ZeipoMessage "Checking for processes using port $Port in Windows..." -Color Yellow
+    
+    # Find and kill Windows processes using the port
+    $processInfo = netstat -ano | findstr ":${Port}" | findstr "LISTENING"
+    
+    if ($processInfo) {
+        # Extract process IDs
+        $processIds = @()
+        
+        foreach ($line in $processInfo) {
+            if ($line -match "LISTENING\s+(\d+)") {
+                $_pid = $matches[1]
+                if (-not ($processIds -contains $_pid)) {
+                    $processIds += $_pid
+                    
+                    # Get process name for better logging
+                    $processName = (Get-Process -Id $_pid -ErrorAction SilentlyContinue).ProcessName
+                    if ($processName) {
+                        Write-ZeipoMessage "Found Windows process using port ${Port}: $processName (PID: $_pid)" -Color Yellow
+                    } else {
+                        Write-ZeipoMessage "Found Windows process using port ${Port}: PID $_pid" -Color Yellow
+                    }
+                }
+            }
+        }
+        
+        # Kill Windows processes
+        foreach ($_pid in $processIds) {
+            Write-ZeipoMessage "Terminating Windows process with PID $_pid..." -Color Yellow
+            taskkill /PID $_pid /F
+        }
+    } else {
+        Write-ZeipoMessage "No Windows processes found using port ${Port}." -Color Green
+    }
+    
+    # Now check and kill processes in WSL
+    Write-ZeipoMessage "Checking for processes using port $Port in WSL..." -Color Yellow
+    
+    # Find WSL processes using the port - run the entire command in WSL
+    $wslProcessInfo = wsl -- bash -c "netstat -tulpn 2>/dev/null | grep ':${Port} ' || true"
+    
+    if ($wslProcessInfo) {
+        Write-ZeipoMessage "Found WSL processes using port ${Port}. Terminating..." -Color Yellow
+        
+        # Kill processes in WSL using port - run everything inside a single bash command
+        wsl -- bash -c "pids=\$(ss -tulpn | grep ':$Port' | awk '{print \$7}' | cut -d'=' -f2 | cut -d',' -f1 | xargs); [ -n \"\$_pids\" ] && sudo kill -9 \$_pids || true"
+        
+        # Also try these common web server processes
+        wsl -- bash -c "sudo pkill -f 'uvicorn' || true"
+        wsl -- bash -c "sudo pkill -f 'fastapi' || true"
+        wsl -- bash -c "sudo pkill -f 'python.*:${Port}' || true"
+    } else {
+        Write-ZeipoMessage "No WSL processes found using port ${Port}." -Color Green
+    }
+    
+    # For Docker containers, stop any that might be using the port
+    Write-ZeipoMessage "Stopping any Docker containers that might be using port ${Port}..." -Color Yellow
+    wsl -- docker ps --quiet --filter "publish=${Port}" | ForEach-Object { wsl -- docker stop $_ }
+    
+    # Wait for ports to be fully released
+    Write-ZeipoMessage "Waiting $WaitSeconds seconds for port to be fully released..." -Color Yellow
+    Start-Sleep -Seconds $WaitSeconds
+    
+    # Verify port is clear in Windows
+    $checkAgainWindows = netstat -ano | findstr ":${Port}" | findstr "LISTENING"
+    if ($checkAgainWindows) {
+        Write-ZeipoMessage "Warning: Port $Port is still in use in Windows after termination attempts." -Color Red
+    } else {
+        Write-ZeipoMessage "Port $Port is now available in Windows." -Color Green
+    }
+    
+    # Verify port is clear in WSL
+    $checkAgainWSL = wsl -- bash -c "ss -tulpn | grep ':${Port}' || true"
+    if ($checkAgainWSL) {
+        Write-ZeipoMessage "Warning: Port $Port is still in use in WSL after termination attempts." -Color Red
+    } else {
+        Write-ZeipoMessage "Port $Port is now available in WSL." -Color Green
+    }
+
+    # Final cleanup - forcefully kill anything using the port
+    wsl -- bash -c "sudo fuser -k ${Port}/tcp 2>/dev/null || true"
 }
 
 # Get project root in WSL format
@@ -220,6 +356,8 @@ switch ($Command) {
     
     "api" {
         Write-ZeipoMessage "Starting the Whisper API server..." 
+
+        Clear-PortConflicts
         
         # First, stop any existing container that might be using the port
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' down"
@@ -432,6 +570,8 @@ switch ($Command) {
         Write-ZeipoMessage "Stopping container..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' down"
         Write-ZeipoMessage "Container stopped." -Color Green
+
+        Clear-PortConflicts
         
         # Also stop any running Cloudflare tunnels
         $process = Get-Process cloudflared -ErrorAction SilentlyContinue
@@ -530,6 +670,8 @@ switch ($Command) {
         
         Write-ZeipoMessage "Starting Zeipo with $provider telephony provider, local: $local" -Color Cyan
         
+        Clear-PortConflicts
+
         # Start container if not running
         Write-ZeipoMessage "Starting Docker container..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
@@ -626,9 +768,7 @@ switch ($Command) {
             $cmd += " -e WS_URL=$wsUrl"
         }
         
-        $cmd += " whisper fastapi dev main.py --host 0.0.0.0"
-        
-        Invoke-WslCommand $cmd
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
     }
     
     "setup" {

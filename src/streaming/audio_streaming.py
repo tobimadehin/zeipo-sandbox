@@ -30,6 +30,7 @@ class AudioStreamManager:
         self, 
         websocket: WebSocket, 
         session_id: str,
+        connection_id: str,
         language: Optional[str] = None,
         model_name: str = "small"
     ) -> None:
@@ -43,7 +44,6 @@ class AudioStreamManager:
             model_name: Whisper model to use
         """    
         # Initialize connection data
-        connection_id = gen_uuid_16()
         file_path = os.path.join(self.recording_dir, f"{session_id}_{connection_id}.wav")
         
         # Prepare audio recording file
@@ -106,6 +106,8 @@ class AudioStreamManager:
         if connection_id not in self.active_connections:
             logger.error(f"Connection not found: {connection_id}")
             return
+        
+        logger.debug(f"Received {len(data)} of {type(data)} from {connection_id}")
         
         connection = self.active_connections[connection_id]
         

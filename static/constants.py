@@ -7,7 +7,7 @@ from src.nlp.entity_extractor import EntityType
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
