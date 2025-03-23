@@ -4,6 +4,7 @@ import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from config import settings
+from src.utils.at_utils import log_call_to_file
 from static.constants import logger
 from src.utils.helpers import gen_uuid_12
 
@@ -181,15 +182,28 @@ class VoipSimulatorProvider(TelephonyProvider):
         session_id = request_data.get("session_id", f"voip_{gen_uuid_12()}")
         client_id = request_data.get("client_id", "anonymous")
         
-        # Log the call (could use your existing log_call_to_file function)
+        # Handle mobile client connections specially
+        if "mobile_client" in request_data or request_data.get("client_type") == "zeipo_voip_tester":
+            logger.info(f"Mobile client connected: {client_id}")
+        
+        # Log the call 
         logger.info(f"Incoming VoIP call: session_id={session_id}, client_id={client_id}")
+        
+        log_call_to_file(
+            call_sid=session_id,
+            phone_number="anonymous", 
+            direction="inbound",
+            status="received",
+            additional_data=request_data
+        )
         
         # Track active call
         self.active_calls[session_id] = {
             "session_id": session_id,
             "client_id": client_id,
             "status": "connected",
-            "start_time": datetime.now().isoformat()
+            "start_time": datetime.now().isoformat(),
+            "is_mobile_client": "mobile_client" in request_data or request_data.get("client_type") == "zeipo_voip_tester"
         }
         
         # Return standardized call data

@@ -223,7 +223,7 @@ class AfricasTalkingProvider(TelephonyProvider):
             "phone_number": phone_number,
             "direction": direction,
             "is_active": request_data.get("isActive", "1") == "1",
-            "provider": "africas_talking",
+            "provider": "at",
             "raw_data": request_data
         }
     
@@ -252,7 +252,7 @@ class AfricasTalkingProvider(TelephonyProvider):
         return {
             "session_id": session_id,
             "digits": digits,
-            "provider": "africas_talking",
+            "provider": "at",
             "raw_data": request_data
         }
     
@@ -283,9 +283,9 @@ class AfricasTalkingProvider(TelephonyProvider):
             "session_id": session_id,
             "status": status,
             "duration": int(duration) if duration else None,
-            "provider": "africas_talking",
+            "provider": "at",
             "raw_data": request_data
         }
 
 # Register the provider
-register_provider("africas_talking", AfricasTalkingProvider)
+register_provider("at", AfricasTalkingProvider)

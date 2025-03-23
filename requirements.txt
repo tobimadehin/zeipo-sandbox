@@ -79,5 +79,6 @@ ujson==5.10.0
 urllib3==2.3.0
 uvicorn==0.34.0
 watchfiles==1.0.4
+webrtcvad==2.0.10
 websockets==15.0.1
 yarl==1.18.3

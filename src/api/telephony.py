@@ -12,7 +12,7 @@ from src.telephony import get_telephony_provider
 from src.utils.helpers import gen_uuid_12
 from static.constants import logger
 
-router = APIRouter(prefix="/telephony")
+router = APIRouter(prefix="/telephony/ws")
 
 @router.post("/voice")
 async def voice_webhook(
@@ -68,7 +68,7 @@ async def voice_webhook(
         
         # Determine content type based on provider
         provider_name = call_data.get("provider", "")
-        content_type = "application/xml" if provider_name == "africas_talking" else "application/json"
+        content_type = "application/xml" if provider_name == "at" else "application/json"
         
         return Response(content=voice_response, media_type=content_type)
         
@@ -80,7 +80,7 @@ async def voice_webhook(
         
         # Determine content type based on provider
         provider_name = call_data.get("provider", "")
-        content_type = "application/xml" if provider_name == "africas_talking" else "application/json"
+        content_type = "application/xml" if provider_name == "at" else "application/json"
         
         return Response(content=error_response, media_type=content_type)
 
@@ -122,7 +122,7 @@ async def dtmf_webhook(
     
     # Determine content type based on provider
     provider_name = dtmf_data.get("provider", "")
-    content_type = "application/xml" if provider_name == "africas_talking" else "application/json"
+    content_type = "application/xml" if provider_name == "at" else "application/json"
     
     return Response(content=voice_response, media_type=content_type)
 

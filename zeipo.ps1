@@ -5,6 +5,18 @@ param (
     $RemainingArgs
 )
 
+# Extract just the main command if there are spaces or hyphens (for subcommands with args)
+if ($Command -match "^(\w+)(\s|-)") {
+    # Get the base command and move the rest to RemainingArgs
+    $baseCommand = $matches[1]
+    $extraArgs = $Command.Substring($baseCommand.Length).Trim()
+    if ($extraArgs) {
+        # Add the extra arguments to the beginning of RemainingArgs
+        $RemainingArgs = @($extraArgs.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)) + $RemainingArgs
+    }
+    $Command = $baseCommand
+}
+
 # Project root is the directory where this script is located
 $projectRoot = $PSScriptRoot
 
@@ -183,25 +195,27 @@ if ($Command -ne "help" -and $Command -ne "version" -and $Command -ne "voice") {
 # Main command processing
 switch ($Command) {
     "help" {
-        Write-Host "Zeipo - AI-driven Telephony Solution Tools" -ForegroundColor Magenta
-        Write-Host "----------------------------------------" -ForegroundColor Magenta
+        Write-Host "Zeipo AI CLI tools" -ForegroundColor Magenta
+        Write-Host "----------------------------------------------------------------------------------------------------------------" -ForegroundColor Magenta
         Write-Host "Commands:" -ForegroundColor Cyan
-        Write-Host "  api         - Start the Whisper API server"
-        Write-Host "  test        - Run Whisper tests"
-        Write-Host "  stt         - Transcribe an audio file (zeipo stt sample.mp3 [--model small])"
-        Write-Host "  tts         - Generate speech from text"
-        Write-Host "  voice       - Start voice channel"
-        Write-Host "  build       - Build or rebuild the Docker image"
-        Write-Host "  clean       - Clean up corrupted model files"
-        Write-Host "  start       - Start the Docker container"
-        Write-Host "  stop        - Stop the Docker container"
-        Write-Host "  bash        - Open a bash shell in the container"
-        Write-Host "  python      - Run a Python command in the container"
-        Write-Host "  logs        - View services/api logs"
-        Write-Host "  calls       - View recent call logs"
-        Write-Host "  gpu         - Test GPU access"
-        Write-Host "  version     - Show version information"
-        Write-Host "  setup       - Setup the zeipo cli for easier access"
+        Write-Host "  api                                           - Start the Whisper API server"
+        Write-Host "  test                                          - Run Whisper tests"
+        Write-Host "  stt                                           - Transcribe an audio file (zeipo stt sample.mp3 [--model small])"
+        Write-Host "  tts                                           - Generate speech from text"
+        Write-Host "  zeipo voice                                   - Start with Africa's Talking + Cloudflare tunnel"
+        Write-Host "  zeipo voice -local                            - Start with Africa's Talking on local network"
+        Write-Host "  zeipo voice -provider voip_simulator -local   - Start with VoIP simulator"
+        Write-Host "  build                                         - Build or rebuild the Docker image"
+        Write-Host "  clean                                         - Clean up corrupted model files"
+        Write-Host "  start                                         - Start the Docker container"
+        Write-Host "  stop                                          - Stop the Docker container"
+        Write-Host "  bash                                          - Open a bash shell in the container"
+        Write-Host "  python                                        - Run a Python command in the container"
+        Write-Host "  logs                                          - View services/api logs"
+        Write-Host "  calls                                         - View recent call logs"
+        Write-Host "  gpu                                           - Test GPU access"
+        Write-Host "  version                                       - Show version information"
+        Write-Host "  setup                                         - Setup the zeipo cli for easier access"
     }
     
     "api" {
@@ -491,75 +505,130 @@ switch ($Command) {
     }
     
     "voice" {
-        Write-ZeipoMessage "Starting Zeipo with Africa's Talking integration..." -Color Cyan
+        # Parse parameters from $RemainingArgs
+        $provider = "at"  # Default value
+        $local = $false
         
-        # Check if Cloudflare CLI is installed
-        $cloudflareOk = Test-CloudflareCLI
-        if (-not $cloudflareOk) {
-            Write-ZeipoMessage "Please install Cloudflare Tunnel CLI (cloudflared) to continue." -Color Red
-            exit 1
+        # Loop through arguments
+        $i = 0
+        while ($i -lt $RemainingArgs.Count) {
+            $arg = $RemainingArgs[$i]
+            
+            if ($arg -eq "-provider" -or $arg -eq "--provider") {
+                if ($i + 1 -lt $RemainingArgs.Count) {
+                    $provider = $RemainingArgs[$i + 1]
+                    $i += 2  # Skip both the flag and its value
+                    continue
+                }
+            }
+            elseif ($arg -eq "-local" -or $arg -eq "--local") {
+                $local = $true
+            }
+            
+            $i++  # Move to next argument
         }
         
-        # Start container first
+        Write-ZeipoMessage "Starting Zeipo with $provider telephony provider, local: $local" -Color Cyan
+        
+        # Start container if not running
         Write-ZeipoMessage "Starting Docker container..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
-        # Start Cloudflare tunnel
-        $tunnelUrl = Start-CloudflareTunnel -Port 8000
-        if ($null -eq $tunnelUrl) {
-            Write-ZeipoMessage "Failed to start Cloudflare Tunnel. Cannot continue." -Color Red
-            exit 1
-        }
+        # Set default configuration
+        $webhookUrl = ""
+        $wsUrl = ""
+        $serverPort = 8000
         
-        # Update the .env file with the tunnel URL
-        $envPath = Join-Path $projectRoot ".env"
-        if (Test-Path $envPath) {
-            $envContent = Get-Content $envPath
-            
-            if ($envContent -match "WEBHOOK_URL=") {
-                $envContent = $envContent -replace "WEBHOOK_URL=.*", "WEBHOOK_URL=$tunnelUrl"
-            } else {
-                $envContent += "`nWEBHOOK_URL=$tunnelUrl"
+        if ($local) {
+            # For local testing, get the computer's network IP
+            $localIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias Wi-*).IPAddress
+            if (-not $localIP) {
+                $localIP = (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias Ethernet*).IPAddress
+            }
+            if (-not $localIP) {
+                Write-ZeipoMessage "Could not detect local IP, using localhost as fallback." -Color Yellow
+                $localIP = "localhost"
             }
             
-            Set-Content -Path $envPath -Value $envContent
-            Write-ZeipoMessage "Updated .env file with Cloudflare Tunnel URL" -Color Green
-        } else {
-            Write-ZeipoMessage "Error: .env file not found in $envPath" -Color Red
-            Write-ZeipoMessage "Please create an .env file with your configuration before running this command." -Color Yellow
+            $webhookUrl = "http://$localIP`:$serverPort"
+            $wsUrl = "ws://$localIP`:$serverPort/api/v1/ws"
+            
+            Write-Host "`nMobile Connection Information:" -ForegroundColor Yellow
+            Write-Host "WebSocket URL: $wsUrl/audio/test_session" -ForegroundColor Cyan
+            Write-Host "Web API: $webhookUrl/api/v1" -ForegroundColor Cyan
+            
+            Write-Host "`nImportant: Enter this URL in your Zeipo VoIP Tester app:" -ForegroundColor Yellow
+            Write-Host "$wsUrl/audio/test_session" -ForegroundColor Green
         }
-        
-        # Get API prefix from env file
-        $apiV1Str = "/api/v1"
-        if (Test-Path $envPath) {
-            $envContent = Get-Content $envPath
-            if ($envContent -match "API_V1_STR=(.*)") {
-                $apiV1Str = $matches[1]
+        else {
+            # For public testing, use Cloudflare tunnel
+            $cloudflareOk = Test-CloudflareCLI
+            if (-not $cloudflareOk) {
+                Write-ZeipoMessage "Please install Cloudflare Tunnel CLI (cloudflared) to continue." -Color Red
+                exit 1
             }
+            
+            # Start Cloudflare tunnel
+            $tunnelUrl = Start-CloudflareTunnel -Port $serverPort
+            if ($null -eq $tunnelUrl) {
+                Write-ZeipoMessage "Failed to start Cloudflare Tunnel. Cannot continue." -Color Red
+                exit 1
+            }
+            
+            $webhookUrl = $tunnelUrl
+            $wsUrl = $tunnelUrl.Replace("https:", "wss:")
+            
+            # Update the .env file with the tunnel URL
+            $envPath = Join-Path $projectRoot ".env"
+            if (Test-Path $envPath) {
+                $envContent = Get-Content $envPath
+                
+                if ($envContent -match "WEBHOOK_URL=") {
+                    $envContent = $envContent -replace "WEBHOOK_URL=.*", "WEBHOOK_URL=$webhookUrl"
+                } else {
+                    $envContent += "`nWEBHOOK_URL=$webhookUrl"
+                }
+                
+                Set-Content -Path $envPath -Value $envContent
+                Write-ZeipoMessage "Updated .env file with Cloudflare Tunnel URL" -Color Green
+            }
+            
+            # Display Africa's Talking webhook URLs
+            $apiV1Str = "/api/v1"
+            if (Test-Path $envPath) {
+                $envContent = Get-Content $envPath
+                if ($envContent -match "API_V1_STR=(.*)") {
+                    $apiV1Str = $matches[1]
+                }
+            }
+            
+            $voiceWebhookUrl = "$webhookUrl$apiV1Str/at/voice"
+            $eventsWebhookUrl = "$webhookUrl$apiV1Str/at/events"
+            $dtmfWebhookUrl = "$webhookUrl$apiV1Str/at/dtmf"
+            
+            Write-Host "`nAfrica's Talking Webhook URLs:" -ForegroundColor Yellow
+            Write-Host "Voice URL: $voiceWebhookUrl" -ForegroundColor Cyan
+            Write-Host "Events URL: $eventsWebhookUrl" -ForegroundColor Cyan
+            Write-Host "DTMF URL: $dtmfWebhookUrl" -ForegroundColor Cyan
         }
         
-        # Calculate Africa's Talking webhook URLs
-        $voiceWebhookUrl = "$tunnelUrl$apiV1Str/at/voice"
-        $eventsWebhookUrl = "$tunnelUrl$apiV1Str/at/events"
-        $dtmfWebhookUrl = "$tunnelUrl$apiV1Str/at/dtmf"
+        # Start the API server with the specified telephony provider
+        Write-ZeipoMessage "Starting API server with $provider provider..." -Color Green
         
-        Write-Host "`nAfrica's Talking Webhook URLs:" -ForegroundColor Yellow
-        Write-Host "Voice URL: $voiceWebhookUrl" -ForegroundColor Cyan
-        Write-Host "Events URL: $eventsWebhookUrl" -ForegroundColor Cyan
-        Write-Host "DTMF URL: $dtmfWebhookUrl" -ForegroundColor Cyan
+        # Build the command with the appropriate environment variables
+        $cmd = "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec"
+        $cmd += " -e PYTHONUNBUFFERED=1"
+        $cmd += " -e TELEPHONY_PROVIDER=$provider"
+        $cmd += " -e DEFAULT_TELEPHONY_PROVIDER=$provider"
         
-        Write-Host "`nImportant: Update your Africa's Talking voice service with these webhook URLs" -ForegroundColor Yellow
-        Write-Host "1. Log in to your Africa's Talking Console" -ForegroundColor White
-        Write-Host "2. Go to Voice > Settings" -ForegroundColor White
-        Write-Host "3. Configure the following URLs:" -ForegroundColor White
-        Write-Host "   - Incoming Call URL: $voiceWebhookUrl" -ForegroundColor White
-        Write-Host "   - Events Callback URL: $eventsWebhookUrl" -ForegroundColor White
-        Write-Host "   - DTMF Callback URL: $dtmfWebhookUrl" -ForegroundColor White
-        Write-Host "4. Save your changes" -ForegroundColor White
+        if ($webhookUrl) {
+            $cmd += " -e WEBHOOK_URL=$webhookUrl"
+            $cmd += " -e WS_URL=$wsUrl"
+        }
         
-        # Start the API server with Africa's Talking integration
-        Write-ZeipoMessage "Starting API server..." -Color Green
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
+        $cmd += " whisper fastapi dev main.py --host 0.0.0.0"
+        
+        Invoke-WslCommand $cmd
     }
     
     "setup" {

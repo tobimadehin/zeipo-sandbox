@@ -6,6 +6,7 @@ from typing import Dict, Optional, Any
 from datetime import datetime
 import wave
 from fastapi import WebSocket
+import webrtcvad
 
 from src.utils.helpers import gen_uuid_16
 from static.constants import RECORDING_DIR, logger
@@ -40,9 +41,7 @@ class AudioStreamManager:
             session_id: The call session ID
             language: Preferred language code (optional)
             model_name: Whisper model to use
-        """
-        await websocket.accept()
-        
+        """    
         # Initialize connection data
         connection_id = gen_uuid_16()
         file_path = os.path.join(self.recording_dir, f"{session_id}_{connection_id}.wav")
@@ -113,18 +112,39 @@ class AudioStreamManager:
         # Update last activity timestamp
         connection["last_activity"] = datetime.now()
         
-        # Write to WAV file
-        connection["wave_file"].writeframes(data)
-        
-        # Process audio for transcription
-        # Assuming data is 16-bit PCM, convert to float32 for Whisper
-        audio_array = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-        
-        # Add to transcriber
-        connection["transcriber"].add_audio_chunk(audio_array)
-        
-        # Store in buffer
-        connection["audio_buffer"].extend(data)
+        try:
+            # Write to WAV file
+            connection["wave_file"].writeframes(data)
+            
+            # Process audio for transcription
+            # For WebM/Opus from mobile, we need to decode first
+            if connection.get("is_mobile_client", False):
+                try:
+                    # This is a simplified example - actual implementation would depend on
+                    # the audio format sent by the mobile client
+                    # Process through VAD to determine speech segments
+                    vad = webrtcvad.Vad(3)  # Aggressiveness level
+                    is_speech = vad.is_speech(data, 16000)
+                    
+                    if is_speech:
+                        # Convert to format expected by Whisper
+                        audio_array = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                        connection["transcriber"].add_audio_chunk(audio_array)
+                except ImportError:
+                    # Fallback if webrtcvad not available
+                    audio_array = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                    connection["transcriber"].add_audio_chunk(audio_array)
+            else:
+                # Standard processing for non-mobile clients
+                audio_array = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                connection["transcriber"].add_audio_chunk(audio_array)
+            
+            # Store in buffer
+            connection["audio_buffer"].extend(data)
+    
+        except Exception as e:
+            logger.error(f"Error processing audio data: {str(e)}")
+
     
     async def disconnect(self, connection_id: str) -> Dict[str, Any]:
         """
