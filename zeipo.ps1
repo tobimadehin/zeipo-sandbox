@@ -310,6 +310,27 @@ function Clear-PortConflicts {
     wsl -- bash -c "sudo fuser -k ${Port}/tcp 2>/dev/null || true"
 }
 
+# Generate a QR code for the URL
+function Show-QRCode {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+    
+    # Create a temporary file to store the QR code
+    $tempFile = [System.IO.Path]::GetTempFileName()
+    
+    # Use curl (pre-installed on Windows 10+) to download QR code as text
+    $curl = @"
+curl -s https://qrenco.de/$Url
+"@
+    
+    # Execute curl and display result directly
+    Write-ZeipoMessage "Scan this QR code to access the Voice client:" -Color Cyan
+    Invoke-Expression $curl
+    Write-ZeipoMessage "URL: $Url" -Color Green
+}
+
 # Get project root in WSL format
 $wslProjectRoot = $projectRoot.ToString().Replace("\", "/").Replace("C:", "/mnt/c").Replace("D:", "/mnt/d")
 Write-Host "Using WSL path: $wslProjectRoot"
@@ -735,7 +756,7 @@ switch ($Command) {
                 Write-ZeipoMessage "Updated .env file with Cloudflare Tunnel URL" -Color Green
             }
             
-            # Display Africa's Talking webhook URLs
+            # Display voice webhook URLs
             $apiV1Str = "/api/v1"
             if (Test-Path $envPath) {
                 $envContent = Get-Content $envPath
@@ -748,10 +769,15 @@ switch ($Command) {
             $eventsWebhookUrl = "$webhookUrl$apiV1Str/at/events"
             $dtmfWebhookUrl = "$webhookUrl$apiV1Str/at/dtmf"
             
-            Write-Host "`nAfrica's Talking Webhook URLs:" -ForegroundColor Yellow
+            Write-Host "`nVoice Webhook URLs:" -ForegroundColor Yellow
             Write-Host "Voice URL: $voiceWebhookUrl" -ForegroundColor Cyan
             Write-Host "Events URL: $eventsWebhookUrl" -ForegroundColor Cyan
             Write-Host "DTMF URL: $dtmfWebhookUrl" -ForegroundColor Cyan
+
+            # Display VoIP client URL
+            $voipClientUrl = "$webhookUrl/client"
+            Write-Host "`nVoIP Client:" -ForegroundColor Yellow
+            Show-QRCode -Url $voipClientUrl
         }
         
         # Start the API server with the specified telephony provider
