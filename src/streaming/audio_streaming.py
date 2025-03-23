@@ -1,6 +1,7 @@
 # src/streaming/audio_streaming.py
 import os
 import asyncio
+from fastapi.websockets import WebSocketState
 import numpy as np
 from typing import Dict, Optional, Any
 from datetime import datetime
@@ -79,11 +80,32 @@ class AudioStreamManager:
         self.active_connections[connection_id] = connection_data
         
         # Start the transcriber
-        def transcription_callback(result):
+        def transcription_callback_wrapper(result):
             connection_data["transcription_results"].append(result)
             connection_data["last_activity"] = datetime.now()
+            
+            # Get the loop from the connection data and run the coroutine in that loop
+            loop = connection_data["loop"]
+            asyncio.run_coroutine_threadsafe(send_transcript_update(result), loop)
+            
+        # Sent transcript updates to the client
+        async def send_transcript_update(result):
+            try:
+                if connection_data["websocket"].client_state == WebSocketState.CONNECTED:
+                    await connection_data["websocket"].send_json({
+                        "type": "transcription",
+                        "connection_id": connection_id,
+                        "session_id": session_id,
+                        "text": result["text"],
+                        "is_final": result["is_final"]
+                    })
+            except Exception as e:
+                logger.error(f"Error sending transcript update: {str(e)}", exc_info=True)
         
-        transcriber.start(transcription_callback)
+        # Store the event loop in connection data
+        connection_data["loop"] = asyncio.get_event_loop()
+
+        transcriber.start(transcription_callback_wrapper)
         
         logger.info(f"WebSocket connection established: {connection_id} for session {session_id}")
         

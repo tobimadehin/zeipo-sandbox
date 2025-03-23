@@ -1,6 +1,10 @@
 # app/main.py
-from fastapi import FastAPI
+from fastapi.responses import FileResponse
 import torch
+from fastapi import FastAPI
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
 from db.session import create_db_and_tables
 from src.api import stt
 from src.nlu import intent_understanding
@@ -8,6 +12,8 @@ from src.api import calls, stt, system, tts, websockets, telephony
 from config import settings
 
 app = FastAPI(title="Zeipo.ai API")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 def startup_event():
@@ -42,6 +48,11 @@ app.include_router(intent_understanding.router, prefix=settings.API_V1_STR)
 app.include_router(system.router, prefix=settings.API_V1_STR)
 app.include_router(websockets.router, prefix=settings.API_V1_STR)
 app.include_router(tts.router, prefix=settings.API_V1_STR)
+
+# Mount static routes
+@app.get("/client")
+async def get_client():
+    return FileResponse("static/client/index.html")
 
 # Register the startup and shutdown events
 @app.on_event("startup")
