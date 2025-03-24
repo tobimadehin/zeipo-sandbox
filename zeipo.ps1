@@ -484,7 +484,7 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing transcription..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.stt $filePath $argsStr"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper python -m src.stt.transcribe $filePath $argsStr"
     }
 
     "tts" {
