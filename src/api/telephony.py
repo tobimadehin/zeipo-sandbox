@@ -1,89 +1,281 @@
 # app/src/api/telephony.py
-from fastapi import APIRouter, Depends, Request, Response, HTTPException, Form
+import time
+from fastapi import APIRouter, Depends, Request, Response, HTTPException, Form, WebSocket, WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from datetime import datetime
 import json
 
 from config import settings
-from db.session import get_db
+from db.session import get_db, SessionLocal
 from db.models import Customer, CallSession
+from src.nlp.intent_processor import IntentProcessor
 from src.telephony import get_telephony_provider
-from src.utils.helpers import gen_uuid_12
+from src.telephony.provider_base import TelephonyProvider
+from src.tts import get_tts_provider
+from src.utils.helpers import gen_uuid_12, gen_uuid_16
 from static.constants import logger
+from src.streaming.audio_streaming import AudioStreamManager
 
-router = APIRouter(prefix="/telephony/ws")
+stream_manager = AudioStreamManager()
+intent_processor = IntentProcessor()
+
+router = APIRouter(prefix="/telephony")
+
+class CallHandler:
+    """Factory class that handles different types of call connections."""
+    
+    @staticmethod
+    async def create_call_session(phone_number: str, provider_name: str = "unknown") -> str:
+        """Create a database record for this call."""
+        db = SessionLocal()
+        try:
+            # Find or create customer
+            customer = db.query(Customer).filter(Customer.phone_number == phone_number).first()
+            
+            if not customer:
+                logger.info(f"Creating new customer with phone number: {phone_number}")
+                customer = Customer(
+                    phone_number=phone_number,
+                    last_activity=datetime.now()
+                )
+                db.add(customer)
+                db.flush()
+            else:
+                logger.info(f"Found existing customer: ID={customer.id}")
+                customer.last_activity = datetime.now()
+            
+            # Create call session
+            session_id = gen_uuid_12()
+            call_session = CallSession(
+                session_id=session_id,
+                customer_id=customer.id,
+                start_time=datetime.now()
+            )
+            
+            db.add(call_session)
+            db.commit()
+            logger.info(f"Created call session: ID={call_session.id}, SessionID={session_id}, Provider: {provider_name}")
+            
+            return session_id
+        except Exception as e:
+            logger.error(f"Database error creating call session: {str(e)}")
+            if db.is_active:
+                db.rollback()
+            return gen_uuid_12()  # Fallback
+        finally:
+            db.close()
+    
+    @staticmethod
+    async def handle_webhook(request: Request, telephony_provider: TelephonyProvider) -> Response:
+        """Handle webhook POST requests (Africa's Talking)."""
+        # Get the form data
+        form_data = await request.form()
+        form_dict = {key: form_data[key] for key in form_data}
+        
+        # Parse the call data using the provider
+        call_data = telephony_provider.parse_call_data(form_dict)
+        provider_name = call_data.get("provider", "unknown")
+        
+        try:
+            # Create call session
+            phone_number = call_data.get("phone_number", "anonymous")
+            session_id = await CallHandler.create_call_session(phone_number, provider_name)
+            
+            # Generate provider-specific response
+            voice_response = telephony_provider.build_voice_response(
+                say_text="Welcome to Zeipo AI. How can I help you today?"
+            )
+            
+            # Determine content type based on provider
+            content_type = "application/xml" if provider_name == "at" else "application/json"
+            
+            return Response(content=voice_response, media_type=content_type)
+            
+        except Exception as e:
+            logger.error(f"Error handling call webhook: {str(e)}")
+            error_response = telephony_provider.build_voice_response(
+                say_text="We're sorry, but an error occurred while processing your call."
+            )
+            
+            # Determine content type based on provider
+            content_type = "application/xml" if provider_name == "at" else "application/json"
+            
+            return Response(content=error_response, media_type=content_type)
+    
+    @staticmethod
+    async def handle_websocket(
+        websocket: WebSocket, 
+        language: Optional[str] = None, 
+        model: str = "small",
+        provider_name: str = "voip_simulator"
+    ):
+        """Handle WebSocket connections (VoIP client)."""
+        connection_id = None
+        session_id = None
+        
+        try:
+            # Accept the WebSocket connection
+            await websocket.accept()
+            connection_id = gen_uuid_16()
+            
+            # Create call session in database
+            session_id = await CallHandler.create_call_session(
+                phone_number=f"websocket-{connection_id[:8]}", 
+                provider_name=provider_name
+            )
+            
+            logger.info(f"New Voice WebSocket connection established: {connection_id}, session: {session_id}")
+            
+            # Respond with connection confirmation
+            await websocket.send_json({
+                "type": "connection_confirmed",
+                "connection_id": connection_id,
+                "session_id": session_id,
+                "server_time": time.time(),
+                "provider": provider_name
+            })
+            
+            # Define callback for transcription results
+            async def transcript_callback(result):
+                if websocket.client_state != WebSocketState.CONNECTED:
+                    return
+                    
+                # Send transcript to client
+                await websocket.send_json({
+                    "type": "transcription",
+                    "connection_id": connection_id,
+                    "session_id": session_id,
+                    "text": result["text"],
+                    "is_final": result["is_final"]
+                })
+                
+                # Process text for response
+                text = result.get("text", "").strip()
+                if not text or len(text) < 5:
+                    return
+                
+                # Debounce responses
+                current_time = time.time()
+                if hasattr(transcript_callback, "last_response_time"):
+                    time_since_last = current_time - transcript_callback.last_response_time
+                    if time_since_last < 5.0:  # Wait at least 5 seconds between responses
+                        return
+                transcript_callback.last_response_time = current_time
+                
+                try:
+                    # Process text through NLU
+                    db = SessionLocal()
+                    try:
+                        # TODO: Analyze results
+                        nlu_results, response_text = intent_processor.process_text(
+                            text=text,
+                            session_id=session_id,
+                            db=db
+                        )
+                        
+                        # Skip if no meaningful response
+                        if not response_text or response_text.strip() == "":
+                            return
+                        
+                        # Send the text response
+                        await websocket.send_json({
+                            "type": "response",
+                            "text": response_text
+                        })
+                        
+                        # Generate and send TTS audio
+                        tts_provider = get_tts_provider()
+                        audio_content = tts_provider.synthesize(response_text)
+                        await websocket.send_bytes(audio_content)
+                        
+                        logger.info(f"Sent voice response: {response_text[:50]}...")
+                    finally:
+                        db.close()
+                except Exception as e:
+                    logger.error(f"Error generating response: {str(e)}")
+            
+            # Static timestamp (Unix time) that tracks when we last sent a TTS response
+            # Enables debouncing: if current_time - last_response_time < 5.0, skip response
+            # Example: last_response_time=1000, current_time=1003 → 3s < 5s → no response
+            # Set to 0 initially so first call always passes time check
+            transcript_callback.last_response_time = 0
+            
+            # Connect to the audio stream manager
+            await stream_manager.connect(
+                websocket=websocket,
+                session_id=session_id,
+                connection_id=connection_id,
+                language=language,
+                model_name=model,
+                callback=transcript_callback
+            )
+            
+            # Send welcome message
+            tts_provider = get_tts_provider()
+            greeting_text = "Welcome to Zeipo AI. How can I help you today?"
+            
+            await websocket.send_json({
+                "type": "greeting",
+                "text": greeting_text
+            })
+            
+            audio_content = tts_provider.synthesize(greeting_text)
+            await websocket.send_bytes(audio_content)
+            
+            # Recieve initial greeting message
+            greeting_msg = await websocket.receive()
+            logger.debug(f"Received test data: {greeting_msg}, {type(greeting_msg)}")
+            
+            # Process incoming audio stream
+            async for data in websocket.iter_bytes():
+                if data:
+                    await stream_manager.receive_audio(connection_id, data)
+        
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected: {connection_id}, session: {session_id}")
+        
+        except Exception as e:
+            logger.error(f"Error in WebSocket connection: {str(e)}", exc_info=True)
+        
+        finally:
+            # Clean up
+            if connection_id:
+                try:
+                    final_results = await stream_manager.disconnect(connection_id)
+                    logger.info(f"Disconnected WebSocket: {connection_id}")
+                except Exception as e:
+                    logger.error(f"Error disconnecting: {str(e)}")
 
 @router.post("/voice")
 async def voice_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    provider_override: Optional[str] = None
 ):
-    """
-    Primary webhook for handling incoming voice calls from any provider.
-    """
-    # Get the telephony provider
-    provider = get_telephony_provider()
+    """Handle HTTP voice webhooks (Africa's Talking)"""
+    # Get the telephony provider (with optional override)
+    provider_name = provider_override or settings.TELEPHONY_PROVIDER
+    telephony_provider = get_telephony_provider(provider_name)
     
-    # Get the form data
-    form_data = await request.form()
-    form_dict = {key: form_data[key] for key in form_data}
-    
-    # Parse the call data using the provider
-    call_data = provider.parse_call_data(form_dict)
-    
-    try:
-        # Find or create customer
-        phone_number = call_data.get("phone_number", "anonymous")
-        customer = db.query(Customer).filter(Customer.phone_number == phone_number).first()
-        
-        if not customer:
-            logger.info(f"Creating new customer with phone number: {phone_number}")
-            customer = Customer(
-                phone_number=phone_number,
-                last_activity=datetime.now()
-            )
-            db.add(customer)
-            db.flush()
-        else:
-            logger.info(f"Found existing customer: ID={customer.id}")
-            customer.last_activity = datetime.now()
-        
-        # Create call session
-        session_id = call_data.get("session_id", gen_uuid_12())
-        call_session = CallSession(
-            session_id=session_id,
-            customer_id=customer.id,
-            start_time=datetime.now()
-        )
-        
-        db.add(call_session)
-        db.commit()
-        logger.info(f"Created call session: ID={call_session.id}, SessionID={session_id}")
-        
-        # Generate provider-specific response
-        voice_response = provider.build_voice_response(
-            say_text="Welcome to Zeipo AI. How can I help you today?"
-        )
-        
-        # Determine content type based on provider
-        provider_name = call_data.get("provider", "")
-        content_type = "application/xml" if provider_name == "at" else "application/json"
-        
-        return Response(content=voice_response, media_type=content_type)
-        
-    except Exception as e:
-        logger.error(f"Error handling call: {str(e)}")
-        error_response = provider.build_voice_response(
-            say_text="We're sorry, but an error occurred while processing your call."
-        )
-        
-        # Determine content type based on provider
-        provider_name = call_data.get("provider", "")
-        content_type = "application/xml" if provider_name == "at" else "application/json"
-        
-        return Response(content=error_response, media_type=content_type)
+    return await CallHandler.handle_webhook(request, telephony_provider)
 
+@router.websocket("/voice/ws")
+async def websocket_voice_endpoint(
+    websocket: WebSocket, 
+    language: Optional[str] = None,
+    model: str = "small",
+    provider: Optional[str] = None
+):
+    """WebSocket endpoint for voice calls"""
+    provider_name = provider or settings.TELEPHONY_PROVIDER
+    await CallHandler.handle_websocket(
+        websocket=websocket,
+        language=language,
+        model=model,
+        provider_name=provider_name
+    )
 
 @router.post("/dtmf")
 async def dtmf_webhook(

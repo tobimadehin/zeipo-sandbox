@@ -127,12 +127,11 @@ class STTProvider:
                 # Add to buffer
                 self.audio_buffer = np.append(self.audio_buffer, audio_chunk)
                 
-                # Trim buffer if too large
-                if len(self.audio_buffer) > self.buffer_samples:
-                    self.audio_buffer = self.audio_buffer[-self.buffer_samples:]
+                # Calculate buffer duration
+                buffer_duration = len(self.audio_buffer) / self.sample_rate
                 
-                # Process buffer when we have enough data
-                if len(self.audio_buffer) >= self.chunk_samples:
+                # Only process when we have at least 2 seconds of audio and every 3rd chunk
+                if buffer_duration >= 2.0 and self.processed_chunks % 3 == 0:
                     try:
                         # Process the audio buffer
                         result = self.model.transcribe(
@@ -158,6 +157,15 @@ class STTProvider:
                     except Exception as e:
                         logger.error(f"Error processing chunk: {str(e)}", exc_info=True)
                 
+                self.processed_chunks += 1
+            
+                # Trim buffer if too large, but keep more context than before
+                max_buffer_duration = 10.0  # 10 seconds max buffer (increased from 5s)
+                max_buffer_samples = int(max_buffer_duration * self.sample_rate)
+                if len(self.audio_buffer) > max_buffer_samples:
+                    # Keep the most recent audio
+                    self.audio_buffer = self.audio_buffer[-max_buffer_samples:]
+                    
                 # Mark task as done
                 self.audio_queue.task_done()
                 

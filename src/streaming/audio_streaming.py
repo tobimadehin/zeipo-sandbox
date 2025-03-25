@@ -3,7 +3,7 @@ import os
 import asyncio
 from fastapi.websockets import WebSocketState
 import numpy as np
-from typing import Dict, Optional, Any
+from typing import Callable, Dict, Optional, Any
 from datetime import datetime
 import wave
 from fastapi import WebSocket
@@ -33,7 +33,9 @@ class AudioStreamManager:
         session_id: str,
         connection_id: str,
         language: Optional[str] = None,
-        model_name: str = "small"
+        model_name: str = "small",
+        callback: Optional[Callable] = None,
+        send_default_updates: bool = True
     ) -> None:
         """
         Connect a new WebSocket client.
@@ -41,8 +43,10 @@ class AudioStreamManager:
         Args:
             websocket: The WebSocket connection
             session_id: The call session ID
+            connection_id: Unique identifier for this connection
             language: Preferred language code (optional)
             model_name: Whisper model to use
+            callback: Optional external callback for transcription results
         """    
         # Initialize connection data
         file_path = os.path.join(self.recording_dir, f"{session_id}_{connection_id}.wav")
@@ -73,7 +77,9 @@ class AudioStreamManager:
             "start_time": datetime.now(),
             "last_activity": datetime.now(),
             "transcription_results": [],
-            "is_finalized": False
+            "is_finalized": False,
+            "external_callback": callback,
+            "send_default_updates": send_default_updates
         }
         
         # Store connection
@@ -88,12 +94,16 @@ class AudioStreamManager:
             loop = connection_data["loop"]
             asyncio.run_coroutine_threadsafe(send_transcript_update(result), loop)
             
+            # Call external callback if provided
+            if connection_data.get("external_callback"):
+                asyncio.run_coroutine_threadsafe(connection_data["external_callback"](result), loop)
+                
         # Sent transcript updates to the client
         async def send_transcript_update(result):
             try:
-                if connection_data["websocket"].client_state == WebSocketState.CONNECTED:
+                if connection_data.get("send_default_updates", True) and connection_data["websocket"].client_state == WebSocketState.CONNECTED:
                     await connection_data["websocket"].send_json({
-                        "type": "transcription",
+                        "type": "audio_stream",
                         "connection_id": connection_id,
                         "session_id": session_id,
                         "text": result["text"],

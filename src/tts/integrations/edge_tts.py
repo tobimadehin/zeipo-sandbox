@@ -4,10 +4,11 @@ import os
 import uuid
 from typing import Dict, List, Optional, Any
 import edge_tts
+
 from config import settings
+import concurrent.futures
 from src.utils.helpers import gen_uuid_16
 from static.constants import logger
-
 from ..tts_base import TTSProvider
 from ..audio_cache import TTSAudioCache
 
@@ -58,6 +59,8 @@ class EdgeTTSProvider(TTSProvider):
         # Determine voice ID based on parameters and defaults
         selected_voice = voice_id or self._get_voice_for_language(language_code) or self.default_voice
         
+        logger.debug(f"Selected voice: {selected_voice}")
+        
         # Check cache first
         cache_path = self.cache.get_cached_audio_path(text, selected_voice, language_code or "")
         if cache_path:
@@ -66,13 +69,25 @@ class EdgeTTSProvider(TTSProvider):
                 return f.read()
         
         try:
-            # Run the async synthesis in a synchronous context
-            audio_content = asyncio.run(self._synthesize_async(text, selected_voice))
+            loop = asyncio.get_event_loop()
+        
+            if loop.is_running():
+                # We're inside a running event loop (FastAPI context)
+                # Use a ThreadPoolExecutor to run the async code in a separate thread
+                
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    future = pool.submit(lambda: asyncio.new_event_loop().run_until_complete(
+                        self._synthesize_async(text, selected_voice)))
+                    audio_content = future.result()
+            else:
+                # No event loop running, use this one directly
+                audio_content = loop.run_until_complete(self._synthesize_async(text, selected_voice))
+
             
             # Save to cache
             cache_file = os.path.join(
                 settings.TTS_CACHE_DIR,
-                f"tts_{gen_uuid_16().hex}.mp3"
+                f"tts_{gen_uuid_16()}.mp3"
             )
             with open(cache_file, 'wb') as f:
                 f.write(audio_content)

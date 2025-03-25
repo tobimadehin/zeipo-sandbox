@@ -5,16 +5,38 @@ param (
     $RemainingArgs
 )
 
-# Extract just the main command if there are spaces or hyphens (for subcommands with args)
-if ($Command -match "^(\w+)(\s|-)") {
-    # Get the base command and move the rest to RemainingArgs
-    $baseCommand = $matches[1]
-    $extraArgs = $Command.Substring($baseCommand.Length).Trim()
-    if ($extraArgs) {
-        # Add the extra arguments to the beginning of RemainingArgs
-        $RemainingArgs = @($extraArgs.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)) + $RemainingArgs
+# First check for hyphenated commands we want to keep intact
+$hyphenatedCommands = @("tts-speak", "tts-voices")
+$foundHyphenated = $false
+
+foreach ($hCmd in $hyphenatedCommands) {
+    if ($Command.StartsWith($hCmd)) {
+        $foundHyphenated = $true
+        # If there's anything after the hyphenated command, move it to RemainingArgs
+        if ($Command.Length -gt $hCmd.Length) {
+            $extraArgs = $Command.Substring($hCmd.Length).Trim()
+            if ($extraArgs) {
+                $RemainingArgs = @($extraArgs.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)) + $RemainingArgs
+            }
+        }
+        $Command = $hCmd
+        break
     }
-    $Command = $baseCommand
+}
+
+# Only do the regular parsing if not a hyphenated command
+if (-not $foundHyphenated) {
+    # Extract just the main command if there are spaces or hyphens
+    if ($Command -match "^(\w+)(\s|-)") {
+        # Get the base command and move the rest to RemainingArgs
+        $baseCommand = $matches[1]
+        $extraArgs = $Command.Substring($baseCommand.Length).Trim()
+        if ($extraArgs) {
+            # Add the extra arguments to the beginning of RemainingArgs
+            $RemainingArgs = @($extraArgs.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)) + $RemainingArgs
+        }
+        $Command = $baseCommand
+    }
 }
 
 # Project root is the directory where this script is located
@@ -515,25 +537,20 @@ switch ($Command) {
     "tts-speak" {
         Write-ZeipoMessage "Generating speech from text..." -Color Cyan
         
-        # Get text and optional parameters
+        # Get the text to speak
         if ($RemainingArgs.Count -lt 1) {
-            Write-ZeipoMessage "Error: Text to speak is required." -Color Red
-            Write-ZeipoMessage "Usage: zeipo tts-speak 'Hello world' [--voice en-US-Neural2-F] [--language en-US]" -Color Yellow
-            exit 1
+            Write-ZeipoMessage "Error: No text provided to speak." -Color Red
+            Write-ZeipoMessage "Usage: zeipo tts-speak 'Hello world' [--voice en-NG-EzinneNeural]" -Color Yellow
+            return
         }
         
         $text = $RemainingArgs[0]
         $voice = $null
-        $language = $null
         
-        # Parse remaining args for voice and language
+        # Check for --voice parameter
         for ($i = 1; $i -lt $RemainingArgs.Count; $i++) {
             if ($RemainingArgs[$i] -eq "--voice" -and $i+1 -lt $RemainingArgs.Count) {
                 $voice = $RemainingArgs[$i+1]
-                $i++
-            }
-            elseif ($RemainingArgs[$i] -eq "--language" -and $i+1 -lt $RemainingArgs.Count) {
-                $language = $RemainingArgs[$i+1]
                 $i++
             }
         }
@@ -542,19 +559,31 @@ switch ($Command) {
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' up -d"
         
-        # Build API request
-        $curlCmd = "curl -s -X POST 'http://localhost:8000/api/v1/tts/synthesize"
-        $curlCmd += "?text=" + [uri]::EscapeDataString($text)
-        if ($voice) {
-            $curlCmd += "&voice_id=" + [uri]::EscapeDataString($voice)
-        }
-        if ($language) {
-            $curlCmd += "&language_code=" + [uri]::EscapeDataString($language)
-        }
-        $curlCmd += "' | python -m json.tool"
+        # Create Windows temp file path
+        $winTempFile = "$env:TEMP\zeipo_tts.mp3"
+        $wslTempFile = "/mnt/c/Users/$env:USERNAME/AppData/Local/Temp/zeipo_tts.mp3"
         
-        # Make API request to synthesize speech
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker-compose -f '$wslComposeFile' exec whisper bash -c '$curlCmd'"
+        # All-in-one command: make the API call and save directly to the temp file
+        $encodedText = [uri]::EscapeDataString($text)
+        $voiceParam = if ($voice) { "&voice_id=$voice" } else { "" }
+        
+        $apiCmd = "curl -s -o '$wslTempFile' 'http://localhost:8000/api/v1/tts/synthesize?text=$encodedText$voiceParam&return_audio=true'"
+        
+        Write-ZeipoMessage "Executing: $apiCmd" -Color Yellow
+        Invoke-WslCommand $apiCmd
+        
+        # Check if file exists and play it
+        if (Test-Path $winTempFile) {
+            $fileSize = (Get-Item $winTempFile).Length
+            if ($fileSize -gt 1000) {  # Check if file has reasonable size
+                Write-ZeipoMessage "Playing audio file ($fileSize bytes)..." -Color Green
+                Start-Process $winTempFile
+            } else {
+                Write-ZeipoMessage "Generated audio file is too small ($fileSize bytes). API might have failed." -Color Red
+            }
+        } else {
+            Write-ZeipoMessage "Failed to generate audio file" -Color Red
+        }
     }
 
     "clean" {

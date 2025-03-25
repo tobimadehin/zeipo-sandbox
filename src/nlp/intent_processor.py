@@ -112,7 +112,7 @@ class IntentProcessor:
                 "confidence": confidence,
                 "all_intents": [(intent.name, score) for intent, score in all_intents],
                 "entities": {entity_type.name: values for entity_type, values in entities_dict.items()},
-                "call_session_id": session_id,
+                "session_id": session_id,
                 "text": text
             }
             

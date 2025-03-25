@@ -145,7 +145,7 @@
             <label>
                 Server URL:
                 <input type="text" id="serverUrl"
-                    value="ws://spanish-dates-alt-dept.trycloudflare.com/api/v1/ws/audio">
+                    value="ws://spanish-dates-alt-dept.trycloudflare.com/api/v1/telephony/voice/ws">
             </label>
         </div>
 
@@ -182,17 +182,17 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Get the current URL
             const currentUrl = window.location.href;
-            
+
             // Parse the URL
             const url = new URL(currentUrl);
-            
+
             // Create WebSocket URL by changing the protocol and adding the path
             const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${url.host}/api/v1/ws/audio`;
-            
+            const wsUrl = `${wsProtocol}//${url.host}/api/v1/telephony/voice/ws`;
+
             // Set the input value
             document.getElementById('serverUrl').value = wsUrl;
         });
@@ -492,18 +492,36 @@
 
                 // Listen for messages
                 socket.onmessage = function (event) {
-                    addMessage(`Received: ${event.data}`, 'received');
+                    if (event.data instanceof Blob) {
+                        // Handle binary audio data from the server
+                        addMessage(`Received audio response (${event.data.size} bytes)`, 'received');
 
-                    try {
-                        const data = JSON.parse(event.data);
+                        // Create an audio element to play the response
+                        const audioUrl = URL.createObjectURL(event.data);
+                        const audio = new Audio(audioUrl);
+                        audio.onended = function () {
+                            URL.revokeObjectURL(audioUrl);  // Clean up
+                        };
+                        audio.play();
+                    } else {
+                        // Handle text/JSON messages
+                        addMessage(`Received: ${event.data}`, 'received');
 
-                        // Check for transcription results
-                        if (data.type === 'transcription' || data.text) {
-                            transcriptionDisplay.textContent = data.text || 'No text transcribed yet';
+                        try {
+                            const data = JSON.parse(event.data);
+
+                            // Check for transcription results
+                            if (data.type === 'transcription' && data.text) {
+                                transcriptionDisplay.textContent = data.text;
+                            }
+                            // Check for response text (for debugging)
+                            else if ((data.type === 'response' || data.type === 'greeting') && data.text) {
+                                addMessage(`AI: ${data.text}`, 'response');
+                            }
+                        } catch (e) {
+                            // Not JSON data
+                            console.log('Received non-JSON data');
                         }
-                    } catch (e) {
-                        // Not JSON data, might be binary
-                        console.log('Received non-JSON data');
                     }
                 };
 
