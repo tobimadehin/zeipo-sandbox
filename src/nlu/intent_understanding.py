@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from db.session import get_db
 from db.models import CallSession
 from src.nlp.intent_processor import IntentProcessor
-from src.api.router import create_router
 
 # Create intent processor
 intent_processor = IntentProcessor()
@@ -27,9 +26,6 @@ class NLUResponse(BaseModel):
     session_id: str
     text: str
 
-router = create_router("/nlu")
-
-@router.post("/", response_model=NLUResponse)
 async def process_text(
     request: NLURequest,
     db: Session = Depends(get_db)

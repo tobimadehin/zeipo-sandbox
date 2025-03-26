@@ -7,20 +7,37 @@ from fastapi.staticfiles import StaticFiles
 
 from db.session import create_db_and_tables
 from src.api import stt
+from src.asterisk.ari_client import ZeipoARIClient
 from src.nlu import intent_understanding
 from src.api import calls, stt, system, tts, websockets, telephony
 from config import settings
+from static.constants import logger
 
 app = FastAPI(title="Zeipo.ai API")
+
+# Global ARI client
+ari_client = None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 def startup_event():
+    global ari_client
+    
+    # Setup database schema
     create_db_and_tables()
+    
     # Create logs directory
     import os
     os.makedirs("logs/calls", exist_ok=True)
+    
+    # Start ARI client
+    try:
+        ari_client = ZeipoARIClient()
+        ari_client.start()
+        logger.info("ARI client started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start ARI client: {str(e)}", exc_info=True)
 
 # Root endpoint from original api.py
 @app.get("/")
@@ -42,12 +59,9 @@ async def root():
 # Mount all API routers
 app.include_router(calls.router, prefix=settings.API_V1_STR)
 app.include_router(stt.router, prefix=settings.API_V1_STR)
-app.include_router(stt.router, prefix=settings.API_V1_STR)
-app.include_router(telephony.router, prefix=settings.API_V1_STR)
-app.include_router(intent_understanding.router, prefix=settings.API_V1_STR)
 app.include_router(system.router, prefix=settings.API_V1_STR)
-app.include_router(websockets.router, prefix=settings.API_V1_STR)
 app.include_router(tts.router, prefix=settings.API_V1_STR)
+app.include_router(telephony.router, prefix=settings.API_V1_STR)
 
 # Mount static routes
 @app.get("/client")
@@ -62,4 +76,9 @@ async def startup_websocket_manager():
 @app.on_event("shutdown")
 async def shutdown_websocket_manager():
     await websockets.stop_cleanup_task()
+    # Stop ARI client
+    global ari_client
+    if ari_client:
+        ari_client.stop()
+        logger.info("ARI client stopped")
 

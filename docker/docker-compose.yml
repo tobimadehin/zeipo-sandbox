@@ -1,16 +1,16 @@
 services:
-  whisper:
+  core:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    container_name: zeipo-core
     volumes:
       - ..:/app
     ports:
       - "8000:8000"
     runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - PYTHONPATH=/app
+    env_file:
+      - .env
     deploy:
       resources:
         reservations:
@@ -22,3 +22,44 @@ services:
     tty: true
     stdin_open: true
     command: sleep infinity
+    networks:
+      - zeipo-network
+    depends_on:
+      - asterisk
+      - redis
+
+  asterisk:
+    image: andrius/asterisk:alpine-latest-20.5.2
+    container_name: zeipo-asterisk
+    ports:
+      - "5060:5060/udp"  # SIP
+      - "5060:5060/tcp"  # SIP (TCP)
+      - "5061:5061/tcp"  # SIP/TLS
+      - "10000-20000:10000-20000/udp"  # RTP media
+      - "8088:8088"  # ARI HTTP API
+      - "8089:8089"  # ARI WebSocket
+    volumes:
+      - ./config/asterisk/config:/etc/asterisk
+      - ./config/asterisk/sounds:/var/lib/asterisk/sounds
+      - ./config/asterisk/spool:/var/spool/asterisk
+      - ./config/asterisk/keys:/etc/asterisk/keys
+      - ./config/asterisk/log:/var/log/asterisk
+    env_file:
+      - .env
+    networks:
+      - zeipo-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - zeipo-network
+    restart: unless-stopped
+
+networks:
+  zeipo-network:
+    driver: bridge

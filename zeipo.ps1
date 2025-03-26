@@ -410,70 +410,70 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
         
         # Get the container IP address
-        $containerIP = wsl -- docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" docker-whisper-1
+        $containerIP = wsl -- docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" docker-core-1
         Write-ZeipoMessage "Container IP address: $containerIP" -Color Green
         
         Write-ZeipoMessage "Starting API server..." -Color Yellow
         Write-ZeipoMessage "API will be available at: http://localhost:8000" -Color Green
         
         # Start the API with explicit 0.0.0.0 binding to allow external connections
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 core fastapi dev main.py --host 0.0.0.0"
     }
     
     "test-all" {
         Write-ZeipoMessage "Running all tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m unittest discover tests"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m unittest discover tests"
     }
 
     "test-at" {
         Write-ZeipoMessage "Running Africa's Talking tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_at"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_at"
     }
 
     "test-api" {
         Write-ZeipoMessage "Running API tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_api"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_api"
     }
 
     "test-stt" {
         Write-ZeipoMessage "Running Whisper tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_stt"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_stt"
     }
 
     "test-tts" {
         Write-ZeipoMessage "Running Google TTS tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_tts"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_tts"
     }
 
     "test-streaming" {
         Write-ZeipoMessage "Running streaming tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_steaming"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_steaming"
     }
 
     "test-nlp" {
         Write-ZeipoMessage "Running NLP tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_nlp"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_nlp"
     }
 
     "test-nlu" {
         Write-ZeipoMessage "Running NLU tests..." -Color Yellow
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tests.test_nlu"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tests.test_nlu"
     }
 
     "test" {
@@ -506,7 +506,7 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing transcription..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m src.stt.transcribe $filePath $argsStr"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m src.stt.transcribe $filePath $argsStr"
     }
 
     "tts" {
@@ -531,7 +531,7 @@ switch ($Command) {
         
         # Make API request to list voices
         $languageParam = if ($language) { "?language_code=$language" } else { "" }
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper curl -s 'http://localhost:8000/api/v1/tts/voices$languageParam' | python -m json.tool"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core curl -s 'http://localhost:8000/api/v1/tts/voices$languageParam' | python -m json.tool"
     }
 
     "tts-speak" {
@@ -595,11 +595,11 @@ switch ($Command) {
         
         # Clean Whisper cache directory
         Write-ZeipoMessage "Removing cached Whisper models..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper rm -rf ~/.cache/whisper/*"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core rm -rf ~/.cache/core/*"
         
         # Verify cleanup
         Write-ZeipoMessage "Verifying cleanup..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper ls -la ~/.cache/whisper/ || mkdir -p ~/.cache/whisper/"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core ls -la ~/.cache/core/ || mkdir -p ~/.cache/core/"
         
         Write-ZeipoMessage "Cleanup completed successfully." -Color Green
     }
@@ -638,7 +638,7 @@ switch ($Command) {
         Write-ZeipoMessage "Starting container (if needed)..." -Color Yellow
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
         
-        wsl -e bash -c "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper bash"
+        wsl -e bash -c "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core bash"
     }
     
     "python" {
@@ -649,7 +649,7 @@ switch ($Command) {
         Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' up -d"
         
         Write-ZeipoMessage "Executing Python command..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python $args"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python $args"
     }
     
     "logs" {
@@ -677,7 +677,7 @@ switch ($Command) {
         
         # Run the call logs viewer script
         Write-ZeipoMessage "Fetching call logs..." -Color Yellow
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec whisper python -m tools.call_logs $args"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec core python -m tools.call_logs $args"
     }
     
     "gpu" {
@@ -823,7 +823,7 @@ switch ($Command) {
             $cmd += " -e WS_URL=$wsUrl"
         }
         
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 whisper fastapi dev main.py --host 0.0.0.0"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 core fastapi dev main.py --host 0.0.0.0"
     }
     
     "setup" {

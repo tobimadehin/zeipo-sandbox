@@ -177,3 +177,7 @@ Now that you have created all the necessary files, follow these steps to get you
 - **Seamless integration**: Connecting transcription with business logic, intent recognition, and automated or human-assisted workflows.  
 
 The Docker-based development environment ensures a consistent and reproducible setup, making it easier to refine and scale each component. By prioritizing these areas, this project is designed to meet the unique challenges of real-time voice processing and automation.
+
+## License
+
+Copyright © 2025 Zeipo.ai - All Rights Reserved

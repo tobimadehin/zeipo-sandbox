@@ -78,3 +78,7 @@ For more detailed information about the NLP components that power the NLU system
 2. A/B testing of different response templates
 3. Analytics dashboard for intent distribution
 4. Language-specific processing pipelines
+
+## License
+
+Copyright © 2025 Zeipo.ai - All Rights Reserved

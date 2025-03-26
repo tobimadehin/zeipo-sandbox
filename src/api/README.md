@@ -147,3 +147,7 @@ zeipo help
 ## Interactive Documentation
 
 When the API is running, visit `/docs` for interactive API documentation (Swagger UI).
+
+## License
+
+Copyright © 2025 Zeipo.ai - All Rights Reserved
