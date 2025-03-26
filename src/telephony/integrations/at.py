@@ -48,35 +48,31 @@ class AfricasTalkingProvider(TelephonyProvider):
         
         if say_text:
             # Check if TTS is enabled
-            if settings.GOOGLE_TTS_ENABLED and kwargs.get("use_tts", True):
-                try:
-                    # Generate TTS audio
-                    tts_provider = get_tts_provider()
-                    audio_content = tts_provider.synthesize(
-                        say_text, 
-                        voice_id=kwargs.get("voice_id"),
-                        language_code=kwargs.get("language_code")
-                    )
-                    
-                    # Save to file
-                    filename = f"tts_{gen_uuid_12()}.mp3"
-                    output_dir = "data/tts_output"
-                    os.makedirs(output_dir, exist_ok=True)
-                    file_path = os.path.join(output_dir, filename)
-                    
-                    tts_provider.save_to_file(audio_content, file_path)
-                    
-                    # Use the webhook base URL to create a public URL
-                    audio_url = f"{settings.WEBHOOK_URL}{settings.API_V1_STR}/tts/audio/{filename}"
-                    
-                    # Use Play instead of Say for TTS audio
-                    response += f'<Play url="{audio_url}"/>'
-                except Exception as e:
-                    logger.error(f"Error using TTS in AT response: {str(e)}")
-                    # Fallback to Say if TTS fails
-                    response += f'<Say>{say_text}</Say>'
-            else:
-                # Use regular Say for AT text-to-speech
+            try:
+                # Generate TTS audio
+                tts_provider = get_tts_provider()
+                audio_content = tts_provider.synthesize(
+                    say_text, 
+                    voice_id=kwargs.get("voice_id"),
+                    language_code=kwargs.get("language_code")
+                )
+                
+                # Save to file
+                filename = f"tts_{gen_uuid_12()}.mp3"
+                output_dir = "data/tts_output"
+                os.makedirs(output_dir, exist_ok=True)
+                file_path = os.path.join(output_dir, filename)
+                
+                tts_provider.save_to_file(audio_content, file_path)
+                
+                # Use the webhook base URL to create a public URL
+                audio_url = f"{settings.WEBHOOK_URL}{settings.API_V1_STR}/tts/audio/{filename}"
+                
+                # Use Play instead of Say for TTS audio
+                response += f'<Play url="{audio_url}"/>'
+            except Exception as e:
+                logger.error(f"Error using TTS in AT response: {str(e)}")
+                # Fallback to Say if TTS fails
                 response += f'<Say>{say_text}</Say>'
         
         if play_url:
