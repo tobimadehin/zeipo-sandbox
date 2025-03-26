@@ -27,7 +27,10 @@ class CallHandler:
     """Factory class that handles different types of call connections."""
     
     @staticmethod
-    async def create_call_session(phone_number: str, provider_name: str = "unknown") -> str:
+    async def create_call_session(
+                                phone_number: str, 
+                                provider_name: str = "unknown", 
+                                session_id: Optional[str] = None) -> str:
         """Create a database record for this call."""
         db = SessionLocal()
         try:
@@ -47,7 +50,13 @@ class CallHandler:
                 customer.last_activity = datetime.now()
             
             # Create call session
-            session_id = gen_uuid_12()
+            session_id = session_id or gen_uuid_12()
+            
+            existing_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
+            if existing_session:
+                logger.info(f"Found existing call session: ID={existing_session.id}, SessionID={session_id}")
+                return existing_session.session_id
+            
             call_session = CallSession(
                 session_id=session_id,
                 customer_id=customer.id,
@@ -70,6 +79,8 @@ class CallHandler:
     @staticmethod
     async def handle_webhook(request: Request, telephony_provider: TelephonyProvider) -> Response:
         """Handle webhook POST requests (Africa's Talking)."""
+        logger.debug(f"Handling webhook request: {request} from provider: {telephony_provider}")
+        
         # Get the form data
         form_data = await request.form()
         form_dict = {key: form_data[key] for key in form_data}
@@ -77,15 +88,18 @@ class CallHandler:
         # Parse the call data using the provider
         call_data = telephony_provider.parse_call_data(form_dict)
         provider_name = call_data.get("provider", "unknown")
+        _session_id = call_data.get("session_id")
         
         try:
             # Create call session
-            phone_number = call_data.get("phone_number", "anonymous")
-            session_id = await CallHandler.create_call_session(phone_number, provider_name)
+            # TODO: Implement factory method for passing different key value 
+            # pairs for same intent as they differ accross multiple providers
+            phone_number = call_data.get("phone_number", f"anonymous-{gen_uuid_12()}")
+            session_id = await CallHandler.create_call_session(phone_number, provider_name, _session_id)
             
             # Generate provider-specific response
             voice_response = telephony_provider.build_voice_response(
-                say_text="Welcome to Zeipo AI. How can I help you today?"
+                say_text="Welcome to Zeipo AI. How can I help you today?" 
             )
             
             # Determine content type based on provider
@@ -94,7 +108,7 @@ class CallHandler:
             return Response(content=voice_response, media_type=content_type)
             
         except Exception as e:
-            logger.error(f"Error handling call webhook: {str(e)}")
+            logger.error(f"Error handling call webhook: {str(e)}", exc_info=True)
             error_response = telephony_provider.build_voice_response(
                 say_text="We're sorry, but an error occurred while processing your call."
             )
@@ -249,15 +263,12 @@ class CallHandler:
                     logger.error(f"Error disconnecting: {str(e)}")
 
 @router.post("/voice")
-async def voice_webhook(
-    request: Request,
-    db: Session = Depends(get_db),
-    provider_override: Optional[str] = None
-):
-    """Handle HTTP voice webhooks (Africa's Talking)"""
-    # Get the telephony provider (with optional override)
-    provider_name = provider_override or settings.TELEPHONY_PROVIDER
-    telephony_provider = get_telephony_provider(provider_name)
+async def voice_webhook(request: Request):
+    """Handle HTTP voice webhooks (Africa's Talking)"""  
+    # TODO: Add support for multiple providers. For now it 
+    # defaults to at when calls come in from this webhook
+    settings.TELEPHONY_PROVIDER = "at"
+    telephony_provider = get_telephony_provider()
     
     return await CallHandler.handle_webhook(request, telephony_provider)
 

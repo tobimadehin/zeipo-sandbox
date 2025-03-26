@@ -42,7 +42,7 @@ def get_telephony_provider() -> TelephonyProvider:
             provider_class = _provider_registry[provider_name]
             _telephony_provider = provider_class()
         except Exception as e:
-            logger.error(f"Error initializing telephony provider {provider_name}: {str(e)}")
+            logger.error(f"Error initializing telephony provider {provider_name}: {str(e)}", exc_info=True)
             # Fall back to default provider if available
             default_provider = settings.DEFAULT_TELEPHONY_PROVIDER
             if default_provider != provider_name and default_provider in _provider_registry:
