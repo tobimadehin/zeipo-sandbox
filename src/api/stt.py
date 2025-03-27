@@ -8,9 +8,9 @@ import tempfile
 import os
 from pydantic import BaseModel
 from db.models import CallSession, Transcription
+from src.stt import get_stt_provider
 from static.constants import AVAILABLE_MODELS, logger
 from db.session import get_db
-from src.api.models import get_model
 from src.api.router import create_router
 
 
@@ -26,34 +26,16 @@ router = create_router("/stt")
 async def process_audio(file_path: str, model_name: str, task: str, language: Optional[str] = None):
     """Process audio file with Whisper."""
     try:
-        # Load model
-        model = get_model(model_name)
+        # Get STT provider
+        provider = get_stt_provider()
         
-        # Set options
-        options = {"task": task}
-        if language:
-            options["language"] = language
-        
-        # Transcribe
-        start_time = time.time()
-        logger.info(f"Starting transcription of {file_path} with model {model_name}")
-        result = model.transcribe(file_path, **options)
-        process_time = time.time() - start_time
-        
-        # Get audio duration for RTF calculation
-        audio = whisper.load_audio(file_path)
-        audio_duration = len(audio) / whisper.audio.SAMPLE_RATE
-        rtf = process_time / audio_duration
-        
-        logger.info(f"Transcription completed in {process_time:.2f}s, RTF: {rtf:.2f}")
-        
-        # Add performance metrics
-        result["_performance"] = {
-            "process_time": process_time,
-            "audio_duration": audio_duration,
-            "real_time_factor": rtf,
-            "device": str(model.device)
-        }
+        # Transcribe using provider
+        result = provider.transcribe(
+            audio_file=file_path, 
+            language=language,
+            task=task,
+            model_name=model_name
+        )
         
         return result
     

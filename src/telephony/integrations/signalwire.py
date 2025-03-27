@@ -14,6 +14,13 @@ from config import settings
 from static.constants import logger
 from src.utils.helpers import gen_uuid_12
 from src.utils.at_utils import log_call_to_file
+from src.telephony.clients.signalwire_client import SignalWireClient
+from src.nlp.intent_processor import IntentProcessor
+from db.session import SessionLocal
+from src.api.telephony import CallHandler
+import asyncio
+from src.nlp.intent_processor import IntentProcessor
+from db.models import CallSession
 
 from ..provider_base import TelephonyProvider
 from ..provider_factory import register_provider
@@ -23,129 +30,126 @@ class SignalWireProvider(TelephonyProvider):
     
     def __init__(self):
         """Initialize the SignalWire provider."""
-        self.fs_client = None
-        self.base_url = f"http://{settings.SIGNALWIRE_HOST}:{settings.SIGNALWIRE_PORT}/api/v1"
-        self.ws_url = f"ws://{settings.SIGNALWIRE_HOST}:{settings.SIGNALWIRE_EVENT_PORT}"
-        self.auth = (settings.SIGNALWIRE_USERNAME, settings.SIGNALWIRE_PASSWORD)
-        self.active_calls = {}
+        self.client = SignalWireClient()
         
-        # Start event socket listener
-        self._start_event_listener()
+        # Register event callbacks
+        self.client.register_callback("call.created", self._on_call_created)
+        self.client.register_callback("call.answered", self._on_call_answered)
+        self.client.register_callback("call.ended", self._on_call_ended)
+        self.client.register_callback("call.dtmf", self._on_call_dtmf)
+        self.client.register_callback("call.speech", self._on_call_speech)
         
         logger.info(f"SignalWire provider initialized")
     
-    def _start_event_listener(self):
-        """Start listening for FreeSWITCH events via websocket."""
-        async def connect_to_events():
-            async with websockets.connect(self.ws_url) as websocket:
-                # Auth with FreeSWITCH
-                auth_message = f"auth {settings.SIGNALWIRE_PASSWORD}"
-                await websocket.send(auth_message)
-                response = await websocket.recv()
-                
-                if "OK" not in response:
-                    logger.error(f"Failed to authenticate with SignalWire: {response}")
-                    return
-                
-                # Subscribe to relevant events
-                await websocket.send("event plain CHANNEL_CREATE CHANNEL_ANSWER CHANNEL_HANGUP DTMF")
-                
-                while True:
-                    event = await websocket.recv()
-                    self._process_event(event)
+    def _on_call_created(self, data: Dict[str, Any]):
+        """Handle call created event."""
+        session_id = data.get("session_id", "unknown")
+        caller_id = data.get("caller_id", "unknown")
+        direction = data.get("direction", "unknown")
         
-        # Run the event listener in a separate thread
-        import threading
-        threading.Thread(target=lambda: asyncio.run(connect_to_events()), daemon=True).start()
+        # Log call creation
+        log_call_to_file(
+            call_sid=session_id,
+            phone_number=caller_id,
+            direction=direction,
+            status="created",
+            additional_data={"provider": "signalwire"}
+        )
+        
+        logger.info(f"Call created: session_id={session_id}, caller_id={caller_id}")
     
-    def _process_event(self, event_text):
-        """Process FreeSWITCH events."""
-        # Parse event data
-        event_data = {}
-        for line in event_text.split("\n"):
-            if ": " in line:
-                key, value = line.split(": ", 1)
-                event_data[key] = value
+    def _on_call_answered(self, data: Dict[str, Any]):
+        """Handle call answered event."""
+        session_id = data.get("session_id", "unknown")
+        caller_id = data.get("caller_id", "unknown")
         
-        event_name = event_data.get("Event-Name")
-        session_id = event_data.get("Unique-ID")
+        # Log call answer
+        log_call_to_file(
+            call_sid=session_id,
+            phone_number=caller_id,
+            direction=data.get("direction", "unknown"),
+            status="answered",
+            additional_data={"provider": "signalwire"}
+        )
         
-        if not session_id or not event_name:
-            return
-            
-        if event_name == "CHANNEL_CREATE":
-            # New call
-            caller_id = event_data.get("Caller-Caller-ID-Number")
-            direction = "inbound" if event_data.get("Call-Direction") == "inbound" else "outbound"
-            
-            self.active_calls[session_id] = {
-                "caller_id": caller_id,
-                "direction": direction,
-                "start_time": datetime.now(),
-                "state": "created"
+        logger.info(f"Call answered: session_id={session_id}")
+        
+        # Play initial greeting
+        self.client.speak_text(session_id, "Welcome to Zeipo AI. How can I help you today?")
+        
+        # Start speech recognition
+        self.client.start_recognition(session_id)
+    
+    def _on_call_ended(self, data: Dict[str, Any]):
+        """Handle call ended event."""
+        session_id = data.get("session_id", "unknown")
+        duration = data.get("duration")
+        hangup_cause = data.get("hangup_cause", "unknown")
+        
+        # Log call end
+        log_call_to_file(
+            call_sid=session_id,
+            phone_number=data.get("caller_id", "unknown"),
+            direction=data.get("direction", "unknown"),
+            status="ended",
+            additional_data={
+                "provider": "signalwire",
+                "duration": duration,
+                "hangup_cause": hangup_cause
             }
-            
-            # Log call
-            log_call_to_file(
-                call_sid=session_id,
-                phone_number=caller_id,
-                direction=direction,
-                status="created",
-                additional_data={"provider": "signalwire"}
-            )
-            
-        elif event_name == "CHANNEL_ANSWER":
-            if session_id in self.active_calls:
-                self.active_calls[session_id]["state"] = "answered"
-                
-                # Log call
-                log_call_to_file(
-                    call_sid=session_id,
-                    phone_number=self.active_calls[session_id].get("caller_id", "unknown"),
-                    direction=self.active_calls[session_id].get("direction", "unknown"),
-                    status="answered",
-                    additional_data={"provider": "signalwire"}
+        )
+        
+        logger.info(f"Call ended: session_id={session_id}, duration={duration}s, cause={hangup_cause}")
+    
+    def _on_call_dtmf(self, data: Dict[str, Any]):
+        """Handle DTMF input."""
+        session_id = data.get("session_id", "unknown")
+        digit = data.get("digit", "")
+        
+        # Log DTMF
+        log_call_to_file(
+            call_sid=session_id,
+            phone_number="unknown",
+            direction="unknown",
+            status="dtmf",
+            additional_data={
+                "provider": "signalwire",
+                "digit": digit
+            }
+        )
+        
+        logger.info(f"DTMF received: session_id={session_id}, digit={digit}")
+    
+    def _on_call_speech(self, data: Dict[str, Any]):
+        """Handle speech recognition results."""
+        session_id = data.get("session_id", "unknown")
+        text = data.get("text", "")
+        
+        logger.info(f"Speech recognized: session_id={session_id}, text={text}")
+        
+        # Process this through your NLU system
+        try:
+            # Create DB session
+            db = SessionLocal()
+            try:
+                # Process text
+                intent_processor = IntentProcessor()
+                nlu_results, response_text = intent_processor.process_text(
+                    text=text,
+                    session_id=session_id,
+                    db=db
                 )
                 
-        elif event_name == "CHANNEL_HANGUP":
-            if session_id in self.active_calls:
-                # Calculate duration
-                start_time = self.active_calls[session_id].get("start_time")
-                duration = None
-                if start_time:
-                    duration = int((datetime.now() - start_time).total_seconds())
-                
-                # Log call end
-                log_call_to_file(
-                    call_sid=session_id,
-                    phone_number=self.active_calls[session_id].get("caller_id", "unknown"),
-                    direction=self.active_calls[session_id].get("direction", "unknown"),
-                    status="hangup",
-                    additional_data={
-                        "duration": duration,
-                        "hangup_cause": event_data.get("Hangup-Cause"),
-                        "provider": "signalwire"
-                    }
-                )
-                
-                # Remove from active calls
-                del self.active_calls[session_id]
-                
-        elif event_name == "DTMF":
-            if session_id in self.active_calls:
-                digit = event_data.get("DTMF-Digit")
-                if digit:
-                    # Log DTMF
-                    log_call_to_file(
-                        call_sid=session_id,
-                        phone_number=self.active_calls[session_id].get("caller_id", "unknown"),
-                        direction=self.active_calls[session_id].get("direction", "unknown"),
-                        status="dtmf",
-                        additional_data={
-                            "dtmf_digit": digit,
-                            "provider": "signalwire"
-                        }
-                    )
+                # Generate response
+                if response_text and response_text.strip():
+                    self.client.speak_text(session_id, response_text)
+                    logger.info(f"Response sent: {response_text[:50]}...")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Error processing speech: {str(e)}")
+            # Send a fallback response
+            self.client.speak_text(session_id, "I'm sorry, I'm having trouble understanding. Could you please try again?")
     
     def build_voice_response(
         self, 
@@ -161,7 +165,7 @@ class SignalWireProvider(TelephonyProvider):
         """
         # Check for special case: SIP dialing for Africa's Talking
         if "dial_sip" in kwargs:
-            # Generate XML to connect Africa's Talking to SignalWire via SIP
+            # Generate XML to connect to SignalWire via SIP
             sip_uri = kwargs.get("dial_sip")
             xml_response = '<?xml version="1.0" encoding="UTF-8"?><Response>'
             xml_response += f'<Dial phoneNumbers="" recordCall="true">'
@@ -206,7 +210,7 @@ class SignalWireProvider(TelephonyProvider):
             
             return json.dumps(response)
         
-        # Default to Africa's Talking XML format
+        # Default to SignalWire XML format
         xml_response = '<?xml version="1.0" encoding="UTF-8"?><Response>'
         
         if say_text:
@@ -236,6 +240,11 @@ class SignalWireProvider(TelephonyProvider):
         if record:
             xml_response += f'<Record/>'
         
+        # Add speech recognition for dialog apps
+        if kwargs.get("get_speech", False):
+            xml_response += '<GetSpeech action="/api/v1/telephony/speech" speechTimeout="5" playBeep="true">'
+            xml_response += '</GetSpeech>'
+        
         xml_response += '</Response>'
         return xml_response
     
@@ -264,34 +273,18 @@ class SignalWireProvider(TelephonyProvider):
             variables = {
                 "origination_caller_id_number": caller_id,
                 "origination_caller_id_name": caller_id,
-                "zeipo_session_id": session_id
+                "session_id": session_id
             }
             
             if say_text:
-                variables["zeipo_say_text"] = say_text
+                variables["initial_tts"] = say_text
             
-            # API parameters
-            params = {
-                "dial_string": dial_string,
-                "api_key": settings.SIGNALWIRE_API_KEY,
-                "variables": variables
-            }
-            
-            # Use SignalWire API to originate the call
-            response = requests.post(
-                f"{self.base_url}/calls",
-                json=params,
-                auth=self.auth
+            # Make the call via the client
+            result = self.client.make_call(
+                destination=to_number,
+                caller_id=caller_id,
+                variables=variables
             )
-            
-            if response.status_code != 200:
-                logger.error(f"Failed to make outbound call: {response.text}")
-                return {
-                    "status": "error",
-                    "message": f"API error: {response.text}"
-                }
-            
-            result = response.json()
             
             # Log outbound call
             log_call_to_file(
@@ -302,19 +295,27 @@ class SignalWireProvider(TelephonyProvider):
                 additional_data={
                     "caller_id": caller_id,
                     "provider": "signalwire",
-                    "fs_uuid": result.get("uuid")
+                    "say_text": say_text
                 }
             )
             
             logger.info(f"Initiated outbound call to {to_number} with session ID {session_id}")
             
-            return {
-                "status": "initiated",
-                "session_id": session_id,
-                "call_uuid": result.get("uuid"),
-                "to": to_number,
-                "provider": "signalwire"
-            }
+            # Return result from client with some additional info
+            if isinstance(result, dict) and "status" in result:
+                # Client already returned a dict
+                result["session_id"] = session_id
+                result["provider"] = "signalwire"
+                return result
+            else:
+                # Create a new response
+                return {
+                    "status": "initiated",
+                    "session_id": session_id,
+                    "call_uuid": getattr(result, "uuid", None),
+                    "to": to_number,
+                    "provider": "signalwire"
+                }
             
         except Exception as e:
             logger.error(f"Failed to make outbound call: {str(e)}", exc_info=True)
@@ -327,8 +328,28 @@ class SignalWireProvider(TelephonyProvider):
         """
         Validate if an incoming webhook request is authentic.
         """
-        # For Africa's Talking, we can't easily validate
-        # For SignalWire webhooks, we could check for specific headers
+        # For SignalWire, we can validate based on known parameters
+        # In production, you might want to add API key validation or other security measures
+        required_fields = []
+        
+        # For voice webhooks
+        if "sessionId" in request_data:
+            required_fields = ["sessionId", "callerNumber", "direction"]
+        # For speech webhooks
+        elif "speechResult" in request_data:
+            required_fields = ["sessionId", "speechResult"]
+        # For DTMF webhooks
+        elif "dtmfDigits" in request_data:
+            required_fields = ["sessionId", "dtmfDigits"]
+        # For event webhooks
+        elif "status" in request_data:
+            required_fields = ["sessionId", "status"]
+        
+        # If we identified the webhook type, validate required fields
+        if required_fields:
+            return all(field in request_data for field in required_fields)
+        
+        # Default validation (no specific webhook type identified)
         return True
     
     def parse_call_data(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -339,6 +360,20 @@ class SignalWireProvider(TelephonyProvider):
         session_id = request_data.get("sessionId", request_data.get("session_id", gen_uuid_12()))
         phone_number = request_data.get("callerNumber", request_data.get("phone_number", "anonymous"))
         direction = request_data.get("direction", "inbound")
+        
+        # Create call session in database if it doesn't exist
+        try:
+            loop = asyncio.new_event_loop()
+            session_id = loop.run_until_complete(
+                CallHandler.create_call_session(
+                    phone_number=phone_number,
+                    provider_name="signalwire",
+                    session_id=session_id
+                )
+            )
+            loop.close()
+        except Exception as e:
+            logger.error(f"Error creating call session in database: {str(e)}")
         
         # Log call to file
         log_call_to_file(
@@ -352,6 +387,31 @@ class SignalWireProvider(TelephonyProvider):
             }
         )
         
+        # Speech results handling
+        if "speechResult" in request_data:
+            speech_text = request_data.get("speechResult", "")
+            logger.info(f"Speech detected for session {session_id}: {speech_text}")
+            
+            # Process speech through NLU if applicable
+            try:
+                # Create DB session
+                db = SessionLocal()
+                try:
+                    # Process text
+                    intent_processor = IntentProcessor()
+                    nlu_results, response_text = intent_processor.process_text(
+                        text=speech_text,
+                        session_id=session_id,
+                        db=db
+                    )
+                    
+                    # Store the response text for later use
+                    request_data["nlu_response"] = response_text
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"Error processing speech through NLU: {str(e)}")
+        
         # Return standardized call data
         return {
             "session_id": session_id,
@@ -359,6 +419,8 @@ class SignalWireProvider(TelephonyProvider):
             "direction": direction,
             "is_active": True,
             "provider": "signalwire",
+            "speech_text": request_data.get("speechResult"),
+            "nlu_response": request_data.get("nlu_response"),
             "raw_data": request_data
         }
     
@@ -369,6 +431,25 @@ class SignalWireProvider(TelephonyProvider):
         # Extract key information
         session_id = request_data.get("sessionId", request_data.get("session_id", "unknown"))
         digits = request_data.get("dtmfDigits", request_data.get("digits", ""))
+        
+        # Process DTMF with SignalWire client if configured
+        # Note: In real implementation, this would trigger application logic
+        if hasattr(self, 'client') and session_id != "unknown":
+            try:
+                # Log DTMF to SignalWire logs
+                logger.info(f"DTMF input for session {session_id}: {digits}")
+                
+                # You could trigger specific logic here based on the digits
+                # For example, if "1" is for a specific menu option:
+                if digits == "1":
+                    # Option 1 selected - e.g., speak a specific message
+                    self.client.speak_text(session_id, "You've selected option 1.")
+                elif digits == "2":
+                    # Option 2 selected
+                    self.client.speak_text(session_id, "You've selected option 2.")
+                # etc.
+            except Exception as e:
+                logger.error(f"Error processing DTMF with SignalWire: {str(e)}")
         
         # Log DTMF to file
         log_call_to_file(
@@ -399,6 +480,34 @@ class SignalWireProvider(TelephonyProvider):
         status = request_data.get("status", "unknown")
         duration = request_data.get("durationInSeconds", request_data.get("duration"))
         
+        # Handle call completion for database updates
+        if status in ["completed", "failed", "no-answer", "busy", "rejected"]:
+            try:      
+                # Create DB session
+                db = SessionLocal()
+                try:
+                    # Find call session in database
+                    call_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
+                    
+                    if call_session:
+                        # Update with end time and duration
+                        call_session.end_time = datetime.now()
+                        if duration is not None:
+                            try:
+                                call_session.duration_seconds = int(duration)
+                            except ValueError:
+                                pass
+                        
+                        # Save changes
+                        db.commit()
+                        logger.info(f"Updated call session {session_id} with end time and duration")
+                    else:
+                        logger.warning(f"Call session not found for {session_id}")
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"Error updating call session: {str(e)}")
+        
         # Log event to file
         log_call_to_file(
             call_sid=session_id,
@@ -419,6 +528,15 @@ class SignalWireProvider(TelephonyProvider):
             "provider": "signalwire",
             "raw_data": request_data
         }
+
+    def get_client(self):
+        """Get the SignalWire client instance."""
+        return self.client
+    
+    def set_client(self, client):
+        """Set the SignalWire client instance."""
+        self.client = client
+        return True
 
 # Register the provider
 register_provider("signalwire", SignalWireProvider)

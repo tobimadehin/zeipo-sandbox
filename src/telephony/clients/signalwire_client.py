@@ -126,11 +126,15 @@ class SignalWireClient:
             caller_id = event_data.get("Caller-Caller-ID-Number")
             direction = "inbound" if event_data.get("Call-Direction") == "inbound" else "outbound"
             
+            # Extract Zeipo session ID if present
+            session_id = event_data.get("variable_session_id", session_id)
+            
             self.active_calls[session_id] = {
                 "caller_id": caller_id,
                 "direction": direction,
                 "start_time": datetime.now(),
-                "state": "created"
+                "state": "created",
+                "session_id": session_id
             }
             
             # Trigger callbacks
@@ -146,12 +150,22 @@ class SignalWireClient:
                 self.active_calls[session_id]["state"] = "answered"
                 self.active_calls[session_id]["answer_time"] = datetime.now()
                 
+                # Get session ID
+                session_id = self.active_calls[session_id].get("session_id", session_id)
+                
                 # Trigger callbacks
                 self._trigger_callback("call.answered", {
                     "session_id": session_id,
                     "caller_id": self.active_calls[session_id].get("caller_id"),
                     "direction": self.active_calls[session_id].get("direction")
                 })
+                
+                # Check for initial TTS message
+                initial_tts = event_data.get("variable_initial_tts")
+                if initial_tts:
+                    # Slight delay to ensure call is fully established
+                    time.sleep(0.5)
+                    self.speak_text(session_id, initial_tts)
         
         elif event_name == "CHANNEL_HANGUP":
             # Call ended
@@ -163,6 +177,9 @@ class SignalWireClient:
                 start_time = self.active_calls[session_id].get("start_time")
                 if start_time:
                     duration = int((datetime.now() - start_time).total_seconds())
+                
+                # Get Zeipo session ID
+                session_id = self.active_calls[session_id].get("session_id", session_id)
                 
                 # Trigger callbacks
                 self._trigger_callback("call.ended", {
@@ -182,6 +199,9 @@ class SignalWireClient:
                 digit = event_data.get("DTMF-Digit")
                 
                 if digit:
+                    # Get Zeipo session ID
+                    session_id = self.active_calls[session_id].get("session_id", session_id)
+                    
                     self._trigger_callback("call.dtmf", {
                         "session_id": session_id,
                         "digit": digit
@@ -195,6 +215,9 @@ class SignalWireClient:
                 speech_text = event_data.get("Speech-Text")
                 
                 if speech_text and session_id in self.active_calls:
+                    # Get Zeipo session ID
+                    session_id = self.active_calls[session_id].get("session_id", session_id)
+                    
                     self._trigger_callback("call.speech", {
                         "session_id": session_id,
                         "text": speech_text
@@ -235,7 +258,7 @@ class SignalWireClient:
             
             # Default variables
             call_vars = {
-                "zeipo_session_id": session_id,
+                "session_id": session_id,
                 "origination_caller_id_number": caller_id or "Zeipo AI"
             }
             
@@ -308,7 +331,7 @@ class SignalWireClient:
             
             # Check in our active calls mapping
             for uuid, call_data in self.active_calls.items():
-                if call_data.get("zeipo_session_id") == session_id:
+                if call_data.get("session_id") == session_id:
                     fs_uuid = uuid
                     break
             
@@ -347,7 +370,7 @@ class SignalWireClient:
             # Find the FreeSWITCH UUID
             fs_uuid = None
             for uuid, call_data in self.active_calls.items():
-                if call_data.get("zeipo_session_id") == session_id:
+                if call_data.get("session_id") == session_id:
                     fs_uuid = uuid
                     break
             
@@ -383,7 +406,7 @@ class SignalWireClient:
             # Find the FreeSWITCH UUID
             fs_uuid = None
             for uuid, call_data in self.active_calls.items():
-                if call_data.get("zeipo_session_id") == session_id:
+                if call_data.get("session_id") == session_id:
                     fs_uuid = uuid
                     break
             
@@ -421,7 +444,7 @@ class SignalWireClient:
             # Find the FreeSWITCH UUID
             fs_uuid = None
             for uuid, call_data in self.active_calls.items():
-                if call_data.get("zeipo_session_id") == session_id:
+                if call_data.get("session_id") == session_id:
                     fs_uuid = uuid
                     break
             
@@ -458,7 +481,7 @@ class SignalWireClient:
             # Find the FreeSWITCH UUID
             fs_uuid = None
             for uuid, call_data in self.active_calls.items():
-                if call_data.get("zeipo_session_id") == session_id:
+                if call_data.get("session_id") == session_id:
                     fs_uuid = uuid
                     break
             
@@ -476,6 +499,208 @@ class SignalWireClient:
             
         except Exception as e:
             logger.error(f"Error stopping recognition: {str(e)}", exc_info=True)
+            return False
+    
+    def send_dtmf(self, session_id: str, digits: str) -> bool:
+        """
+        Send DTMF tones to an active call.
+        
+        Args:
+            session_id: The session ID of the call
+            digits: DTMF digits to send (0-9, *, #)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the FreeSWITCH UUID
+            fs_uuid = None
+            for uuid, call_data in self.active_calls.items():
+                if call_data.get("session_id") == session_id:
+                    fs_uuid = uuid
+                    break
+            
+            if not fs_uuid:
+                return False
+            
+            # API request to send DTMF
+            response = requests.post(
+                f"{self.base_url}/calls/{fs_uuid}/dtmf",
+                json={"digits": digits},
+                auth=self.auth
+            )
+            
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.error(f"Error sending DTMF: {str(e)}", exc_info=True)
+            return False
+    
+    def create_conference(self, conference_name: str) -> Dict[str, Any]:
+        """
+        Create a conference room.
+        
+        Args:
+            conference_name: Name of the conference to create
+            
+        Returns:
+            Conference response details
+        """
+        try:
+            # API request to create conference
+            response = requests.post(
+                f"{self.base_url}/conferences",
+                json={"name": conference_name},
+                auth=self.auth
+            )
+            
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"API error: {response.text}",
+                    "code": response.status_code
+                }
+            
+            result = response.json()
+            
+            return {
+                "status": "success",
+                "conference_name": conference_name,
+                "result": result
+            }
+            
+        except Exception as e:
+            logger.error(f"Error creating conference: {str(e)}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def join_conference(self, session_id: str, conference_name: str) -> bool:
+        """
+        Join a call to a conference.
+        
+        Args:
+            session_id: The session ID of the call
+            conference_name: Name of the conference to join
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the FreeSWITCH UUID
+            fs_uuid = None
+            for uuid, call_data in self.active_calls.items():
+                if call_data.get("session_id") == session_id:
+                    fs_uuid = uuid
+                    break
+            
+            if not fs_uuid:
+                return False
+            
+            # API request to join conference
+            response = requests.post(
+                f"{self.base_url}/calls/{fs_uuid}/conference",
+                json={"conference_name": conference_name},
+                auth=self.auth
+            )
+            
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.error(f"Error joining conference: {str(e)}", exc_info=True)
+            return False
+    
+    def record_call(self, session_id: str, file_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Start recording a call.
+        
+        Args:
+            session_id: The session ID of the call
+            file_name: Optional custom filename (without extension)
+            
+        Returns:
+            Recording details
+        """
+        try:
+            # Find the FreeSWITCH UUID
+            fs_uuid = None
+            for uuid, call_data in self.active_calls.items():
+                if call_data.get("session_id") == session_id:
+                    fs_uuid = uuid
+                    break
+            
+            if not fs_uuid:
+                return {
+                    "status": "error",
+                    "message": f"No active call found for session ID: {session_id}"
+                }
+            
+            # Generate filename if not provided
+            if not file_name:
+                file_name = f"rec_{session_id}_{int(time.time())}"
+            
+            # API request to start recording
+            response = requests.post(
+                f"{self.base_url}/calls/{fs_uuid}/record",
+                json={"file_name": file_name},
+                auth=self.auth
+            )
+            
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"API error: {response.text}",
+                    "code": response.status_code
+                }
+            
+            result = response.json()
+            
+            return {
+                "status": "success",
+                "session_id": session_id,
+                "recording_path": result.get("recording_path"),
+                "file_name": file_name
+            }
+            
+        except Exception as e:
+            logger.error(f"Error starting recording: {str(e)}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def stop_recording(self, session_id: str) -> bool:
+        """
+        Stop recording a call.
+        
+        Args:
+            session_id: The session ID of the call
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Find the FreeSWITCH UUID
+            fs_uuid = None
+            for uuid, call_data in self.active_calls.items():
+                if call_data.get("session_id") == session_id:
+                    fs_uuid = uuid
+                    break
+            
+            if not fs_uuid:
+                return False
+            
+            # API request to stop recording
+            response = requests.post(
+                f"{self.base_url}/calls/{fs_uuid}/record/stop",
+                auth=self.auth
+            )
+            
+            return response.status_code == 200
+            
+        except Exception as e:
+            logger.error(f"Error stopping recording: {str(e)}", exc_info=True)
             return False
     
     def stop(self):

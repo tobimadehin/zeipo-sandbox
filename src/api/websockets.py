@@ -15,7 +15,6 @@ from src.streaming.audio_streaming import AudioStreamManager
 from src.nlp.intent_processor import IntentProcessor
 from src.api.router import create_router
 from src.utils.helpers import convert_opus_to_pcm, gen_uuid_12, gen_uuid_16
-from ...main import ari_client
 
 # Create audio stream manager
 stream_manager = AudioStreamManager()

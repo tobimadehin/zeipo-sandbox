@@ -82,8 +82,8 @@ async def startup_websocket_manager():
 async def shutdown_websocket_manager():
     await websockets.stop_cleanup_task()
     # Stop ARI client
-    global ari_client
-    if ari_client:
-        ari_client.stop()
+    global signalwire_client
+    if signalwire_client:
+        signalwire_client.stop()
         logger.info("ARI client stopped")
 

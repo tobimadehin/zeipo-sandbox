@@ -1,5 +1,6 @@
 # app/src/api/telephony.py
 import asyncio
+import json
 import time
 import aiohttp
 from pydantic import BaseModel
@@ -19,15 +20,15 @@ from src.telephony import get_telephony_provider
 from src.tts import get_tts_provider
 from src.utils.helpers import gen_uuid_12, gen_uuid_16
 from static.constants import logger
-from src.streaming.audio_streaming import AudioStreamManager
-from ...main import ari_client  
+from src.streaming.audio_streaming import AudioStreamManager 
 
+# Global variables
 stream_manager = AudioStreamManager()
 intent_processor = IntentProcessor()
+signalwire_client = None
 
 router = APIRouter(prefix="/telephony")
 
-# Add these models for WebRTC signaling
 class WebRTCSignal(BaseModel):
     """
     Model for WebRTC signaling messages exchanged between client and server.
@@ -120,50 +121,103 @@ class CallHandler:
     
     @staticmethod
     async def handle_webhook(request: Request) -> Response:
-        """Handle webhook POST requests (Africa's Talking)."""
-        telephony_provider = get_telephony_provider()
+        """Handle webhook POST requests (Africa's Talking or SignalWire)."""
+        provider = get_telephony_provider()
         
-        logger.debug(f"Handling webhook request: {request} from provider: {telephony_provider}")
+        logger.debug(f"Handling webhook request from provider: {provider}")
         
         # Get the form data
         form_data = await request.form()
         form_dict = {key: form_data[key] for key in form_data}
         
         # Parse call data
-        call_data = telephony_provider.parse_call_data(form_dict)
+        call_data = provider.parse_call_data(form_dict)
         session_id = call_data.get("session_id")
         
-        # Build response to dial SIP extension in Asterisk
-        sip_extension = "9000"  # The Stasis application extension in Asterisk
-        voice_response = telephony_provider.build_voice_response(
-            dial_sip=f"{sip_extension}@{settings.ASTERISK_HOST}"
+        # For SignalWire, route through a dialog application
+        if settings.TELEPHONY_PROVIDER == "signalwire":
+            # Generate XML that instructs SignalWire to use our dialog script
+            dialplan_response = '<?xml version="1.0" encoding="UTF-8"?><Response>'
+            dialplan_response += '<GetSpeech action="/api/v1/telephony/speech" speechTimeout="5" playBeep="true">'
+            dialplan_response += '<Say>Welcome to Zeipo AI. How can I help you today?</Say>'
+            dialplan_response += '</GetSpeech></Response>'
+            return Response(content=dialplan_response, media_type="application/xml")
+        
+        voice_response = provider.build_voice_response(
+            say_text="Welcome to Zeipo AI. How can I help you today?" 
         )
         
         return Response(content=voice_response, media_type="application/xml")
     
-    @staticmethod
-    async def handle_websocket(
-        websocket: WebSocket, 
-        language: Optional[str] = None, 
-        model: str = "small",
-        provider_name: str = "voip_simulator"
-    ):
-        """Handle WebSocket connections (VoIP client)."""
-        connection_id = None
-        session_id = None
+    
+    @router.post("/voice")
+    async def voice_webhook(request: Request):
+        """Handle Africa's Talking voice webhook - routes to Asterisk"""  
+        # Set the telephony provider to signalwire (Default)
+        settings.TELEPHONY_PROVIDER = "signalwire"
         
+        return await CallHandler.handle_webhook(request)
+        
+        
+    @router.post("/speech")
+    async def speech_webhook(request: Request):
+        """Handle speech recognition results from SignalWire"""
+        form_data = await request.form()
+        form_dict = {key: form_data[key] for key in form_data}
+        
+        logger.debug(f"Received speech recognition results: {json.dumps(form_dict, indent=4, sort_keys=True)}")
+        
+        # Extract session ID and speech text
+        session_id = form_dict.get("sessionId", "unknown")
+        speech_text = form_dict.get("speechResult", "")
+        
+        logger.info(f"Received speech: {speech_text} for session {session_id}")
+        
+        # Process speech through NLU
+        db = SessionLocal()
         try:
-            # Accept the WebSocket connection
-            await websocket.accept()
-            connection_id = gen_uuid_16()
-            
-            # Create call session in database
-            session_id = await CallHandler.create_call_session(
-                phone_number=f"websocket-{connection_id[:8]}", 
-                provider_name=provider_name
+            # TODO: Process the speech text
+            nlu_results, response_text = intent_processor.process_text(
+                text=speech_text,
+                session_id=session_id,
+                db=db
             )
             
-            logger.info(f"New Voice WebSocket connection established: {connection_id}, session: {session_id}")
+            # Generate response XML
+            xml_response = '<?xml version="1.0" encoding="UTF-8"?><Response>'
+            xml_response += f'<Say>{response_text}</Say>'
+            xml_response += '<GetSpeech action="/api/v1/telephony/speech" speechTimeout="5">'
+            xml_response += '</GetSpeech></Response>'
+            
+            return Response(content=xml_response, media_type="application/xml")
+        except Exception as e:
+            logger.error(f"Error processing speech: {str(e)}")
+            return Response(
+                content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, I encountered an error.</Say></Response>',
+                media_type="application/xml"
+            )
+        finally:
+            db.close()
+
+    
+    @router.websocket("/webrtc/ws/{session_id}")
+    async def webrtc_websocket(
+        websocket: WebSocket, 
+        session_id: str,
+        language: Optional[str] = None,
+        model: str = "small"
+    ):
+        """
+        WebSocket endpoint for WebRTC signaling and audio streaming.
+        """
+        connection_id = None
+        
+        try:
+            connection_id = gen_uuid_16()
+            
+            # Accept the WebSocket connection
+            await websocket.accept()
+            logger.info(f"WebRTC WebSocket connection established: {connection_id}, session: {session_id}")
             
             # Respond with connection confirmation
             await websocket.send_json({
@@ -171,10 +225,10 @@ class CallHandler:
                 "connection_id": connection_id,
                 "session_id": session_id,
                 "server_time": time.time(),
-                "provider": provider_name
+                "provider": "signalwire"
             })
             
-            # Define callback for transcription results
+            # Set up transcript callback
             async def transcript_callback(result):
                 if websocket.client_state != WebSocketState.CONNECTED:
                     return
@@ -182,64 +236,38 @@ class CallHandler:
                 # Send transcript to client
                 await websocket.send_json({
                     "type": "transcription",
-                    "connection_id": connection_id,
-                    "session_id": session_id,
                     "text": result["text"],
                     "is_final": result["is_final"]
                 })
                 
-                # Process text for response
-                text = result.get("text", "").strip()
-                if not text or len(text) < 5:
-                    return
-                
-                # Debounce responses
-                current_time = time.time()
-                if hasattr(transcript_callback, "last_response_time"):
-                    time_since_last = current_time - transcript_callback.last_response_time
-                    if time_since_last < 5.0:  # Wait at least 5 seconds between responses
-                        return
-                transcript_callback.last_response_time = current_time
-                
-                try:
-                    # Process text through NLU
-                    db = SessionLocal()
-                    try:
-                        # TODO: Analyze results
-                        nlu_results, response_text = intent_processor.process_text(
-                            text=text,
-                            session_id=session_id,
-                            db=db
-                        )
-                        
-                        # Skip if no meaningful response
-                        if not response_text or response_text.strip() == "":
-                            return
-                        
-                        # Send the text response
-                        await websocket.send_json({
-                            "type": "response",
-                            "text": response_text
-                        })
-                        
-                        # Generate and send TTS audio
-                        tts_provider = get_tts_provider()
-                        audio_content = tts_provider.synthesize(response_text)
-                        await websocket.send_bytes(audio_content)
-                        
-                        logger.info(f"Sent voice response: {response_text[:50]}...")
-                    finally:
-                        db.close()
-                except Exception as e:
-                    logger.error(f"Error generating response: {str(e)}")
+                # Process intent and generate response for final transcripts
+                if result.get("is_final", False):
+                    text = result.get("text", "").strip()
+                    if text and len(text) > 5:
+                        # Process through NLU
+                        db = SessionLocal()
+                        try:
+                            # TODO: Analyze the results
+                            nlu_results, response_text = intent_processor.process_text(
+                                text=text,
+                                session_id=session_id,
+                                db=db
+                            )
+                            
+                            if response_text and response_text.strip():
+                                # Send text response to client
+                                await websocket.send_json({
+                                    "type": "response",
+                                    "text": response_text
+                                })
+                                
+                                # Also send via SignalWire TTS if available
+                                if signalwire_client:
+                                    signalwire_client.speak_text(session_id, response_text)
+                        finally:
+                            db.close()
             
-            # Static timestamp (Unix time) that tracks when we last sent a TTS response
-            # Enables debouncing: if current_time - last_response_time < 5.0, skip response
-            # Example: last_response_time=1000, current_time=1003 → 3s < 5s → no response
-            # Set to 0 initially so first call always passes time check
-            transcript_callback.last_response_time = 0
-            
-            # Connect to the audio stream manager
+            # Connect to audio stream manager
             await stream_manager.connect(
                 websocket=websocket,
                 session_id=session_id,
@@ -249,282 +277,196 @@ class CallHandler:
                 callback=transcript_callback
             )
             
-            # Send welcome message
-            tts_provider = get_tts_provider()
-            greeting_text = "Welcome to Zeipo AI. How can I help you today?"
-            
-            await websocket.send_json({
-                "type": "greeting",
-                "text": greeting_text
-            })
-            
-            audio_content = tts_provider.synthesize(greeting_text)
-            await websocket.send_bytes(audio_content)
-            
-            # Recieve initial greeting message
-            greeting_msg = await websocket.receive()
-            logger.debug(f"Received test data: {greeting_msg}, {type(greeting_msg)}")
-            
-            # Process incoming audio stream
-            async for data in websocket.iter_bytes():
-                if data:
-                    await stream_manager.receive_audio(connection_id, data)
+            # Main WebSocket message loop
+            async for message in websocket.iter_json():
+                msg_type = message.get("type")
+                
+                if msg_type == "webrtc_offer":
+                    # Forward SDP offer to SignalWire
+                    logger.info(f"Received WebRTC offer for session {session_id}")
+                    
+                    if signalwire_client:
+                        # In real implementation, would create SignalWire WebRTC session
+                        # Here we'll just respond with a placeholder
+                        await websocket.send_json({
+                            "type": "webrtc_answer",
+                            "sdp": "v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n"
+                        })
+                
+                elif msg_type == "ice_candidate":
+                    # Forward ICE candidate
+                    logger.info(f"Received ICE candidate for session {session_id}")
+                    
+                    # In real implementation would send to SignalWire
+                    pass
+                
+                elif msg_type == "audio_data":
+                    # Process audio data
+                    audio_data = message.get("data")
+                    if audio_data:
+                        await stream_manager.receive_audio(connection_id, audio_data)
+                
+                elif msg_type == "end_call":
+                    # End the call
+                    logger.info(f"Received end call request for session {session_id}")
+                    
+                    if signalwire_client:
+                        signalwire_client.hangup_call(session_id)
+                    
+                    # Close the WebSocket
+                    await websocket.close()
+                    break
         
         except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected: {connection_id}, session: {session_id}")
+            logger.info(f"WebRTC WebSocket disconnected: {connection_id}")
         
         except Exception as e:
-            logger.error(f"Error in WebSocket connection: {str(e)}", exc_info=True)
+            logger.error(f"Error in WebRTC WebSocket: {str(e)}", exc_info=True)
         
         finally:
             # Clean up
             if connection_id:
                 try:
-                    final_results = await stream_manager.disconnect(connection_id)
-                    logger.info(f"Disconnected WebSocket: {connection_id}")
+                    await stream_manager.disconnect(connection_id)
+                    logger.info(f"Disconnected WebRTC WebSocket: {connection_id}")
                 except Exception as e:
-                    logger.error(f"Error disconnecting: {str(e)}")
+                    logger.error(f"Error disconnecting WebRTC WebSocket: {str(e)}")
+    
 
-@router.post("/voice")
-async def voice_webhook(request: Request):
-    """Handle Africa's Talking voice webhook - routes to Asterisk"""  
-    # Set the telephony provider to Africa's Talking (Default)
-    settings.TELEPHONY_PROVIDER = "signalwire"
-    
-    return await CallHandler.handle_webhook(request)
-
-@router.websocket("/voice/ws")
-async def websocket_voice_endpoint(
-    websocket: WebSocket, 
-    language: Optional[str] = None,
-    model: str = "small",
-    provider: Optional[str] = None
-):
-    """WebSocket endpoint for voice calls"""
-    provider_name = provider or settings.TELEPHONY_PROVIDER
-    await CallHandler.handle_websocket(
-        websocket=websocket,
-        language=language,
-        model=model,
-        provider_name=provider_name
-    )
-
-@router.post("/dtmf")
-async def dtmf_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Webhook for handling DTMF input from the keypad.
-    """
-    # Get the telephony provider
-    provider = get_telephony_provider()
-    
-    # Get the form data
-    form_data = await request.form()
-    form_dict = {key: form_data[key] for key in form_data}
-    
-    # Parse the DTMF data using the provider
-    dtmf_data = provider.parse_dtmf_data(form_dict)
-    
-    session_id = dtmf_data.get("session_id")
-    digits = dtmf_data.get("digits", "")
-    
-    logger.info(f"DTMF input: sessionId={session_id}, digits={digits}")
-    
-    # Process DTMF input
-    response_text = "You entered "
-    if digits:
-        for digit in digits:
-            response_text += f"{digit}, "
-        response_text += "Thank you for your input."
-    else:
-        response_text = "No digits were received. Please try again."
-    
-    # Generate provider-specific response
-    voice_response = provider.build_voice_response(say_text=response_text)
-    
-    # Determine content type based on provider
-    provider_name = dtmf_data.get("provider", "")
-    content_type = "application/xml" if provider_name == "at" else "application/json"
-    
-    return Response(content=voice_response, media_type=content_type)
-
-
-@router.post("/events")
-async def events_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Webhook for handling call events like hangup, transfer, etc.
-    """
-    # Get the telephony provider
-    provider = get_telephony_provider()
-    
-    # Get the form data
-    form_data = await request.form()
-    form_dict = {key: form_data[key] for key in form_data}
-    
-    # Parse the event data using the provider
-    event_data = provider.parse_event_data(form_dict)
-    
-    session_id = event_data.get("session_id", "unknown")
-    status = event_data.get("status", "unknown")
-    duration = event_data.get("duration")
-    
-    logger.info(f"Call event: sessionId={session_id}, status={status}, duration={duration}")
-    
-    # Update call session if it's a call end event
-    if status in ["completed", "failed", "no-answer", "busy", "rejected"]:
-        call_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
+    @router.post("/dtmf")
+    async def dtmf_webhook(
+        request: Request,
+        db: Session = Depends(get_db)
+    ):
+        """
+        Webhook for handling DTMF input from the keypad.
+        """
+        # Get the telephony provider
+        provider = get_telephony_provider()
         
-        if call_session:
-            call_session.end_time = datetime.now()
-            if duration is not None:
-                try:
-                    call_session.duration_seconds = int(duration)
-                except ValueError:
-                    pass
-            
-            db.commit()
-            logger.info(f"Updated call session {session_id} with end time and duration")
+        # Get the form data
+        form_data = await request.form()
+        form_dict = {key: form_data[key] for key in form_data}
+        
+        # Parse the DTMF data using the provider
+        dtmf_data = provider.parse_dtmf_data(form_dict)
+        
+        session_id = dtmf_data.get("session_id")
+        digits = dtmf_data.get("digits", "")
+        
+        logger.info(f"DTMF input: sessionId={session_id}, digits={digits}")
+        
+        # Process DTMF input
+        response_text = "You entered "
+        if digits:
+            for digit in digits:
+                response_text += f"{digit}, "
+            response_text += "Thank you for your input."
         else:
-            logger.warning(f"Call session not found for sessionId={session_id}")
-    
-    return {"status": "success"}
+            response_text = "No digits were received. Please try again."
+        
+        # Generate provider-specific response
+        voice_response = provider.build_voice_response(say_text=response_text)
+        
+        # Determine content type based on provider
+        provider_name = dtmf_data.get("provider", "")
+        content_type = "application/xml" if provider_name == "at" else "application/json"
+        
+        return Response(content=voice_response, media_type=content_type)
 
 
-@router.post("/outbound")
-async def make_outbound_call(
-    phone_number: str,
-    caller_id: str = "Zeipo AI",
-    say_text: Optional[str] = None,
-    provider: Optional[str] = None,
-):
-    """
-    Make an outbound call using the configured telephony provider.
-    
-    Args:
-        phone_number: Phone number to call
-        caller_id: Name to display as caller ID
-        say_text: Text to speak when the call is answered
-        provider: Override the default telephony provider
-    
-    Returns:
-        Call response details
-    """
-    provider_name = provider or settings.TELEPHONY_PROVIDER
-    
-    try:
-        telephony_provider = get_telephony_provider()
+    @router.post("/events")
+    async def events_webhook(
+        request: Request,
+        db: Session = Depends(get_db)
+    ):
+        """
+        Webhook for handling call events like hangup, transfer, etc.
+        """
+        # Get the telephony provider
+        provider = get_telephony_provider()
         
-        # Special handling for Asterisk if needed
-        if provider_name == "asterisk" and ari_client:
-            # Ensure ARI client is set on provider if it's AsteriskProvider
-            if hasattr(telephony_provider, 'set_ari_client') and not telephony_provider.ari_client:
-                telephony_provider.set_ari_client(ari_client)
-            
-        # Make the call
-        call_response = telephony_provider.make_outbound_call(
-            to_number=phone_number,
-            caller_id=caller_id,
-            say_text=say_text
-        )
+        # Get the form data
+        form_data = await request.form()
+        form_dict = {key: form_data[key] for key in form_data}
         
-        return call_response
+        # Parse the event data using the provider
+        event_data = provider.parse_event_data(form_dict)
         
-    except Exception as e:
-        logger.error(f"Error making outbound call: {str(e)}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-    
-# Add ARI/Asterisk-specific routes
-@router.post("/asterisk/events/{event_type}")
-async def asterisk_events(
-    event_type: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Webhook for Asterisk ARI events.
-    This endpoint receives events directly from Asterisk ARI.
-    
-    Args:
-        event_type: Type of event (e.g., StasisStart, StasisEnd, etc.)
-        request: The request object
-    """
-    # Get the request data
-    data = await request.json()
-    
-    logger.info(f"Received Asterisk {event_type} event: {data}")
-    
-    # Update telephony provider to Asterisk (for this request)
-    settings.TELEPHONY_PROVIDER = "asterisk"
-    
-    try:
-        # Handle the event based on its type
-        if event_type == "StasisStart":
-            # A new call entered the Stasis application
-            channel_id = data.get("channel", {}).get("id")
-            caller_id = data.get("channel", {}).get("caller", {}).get("number")
+        session_id = event_data.get("session_id", "unknown")
+        status = event_data.get("status", "unknown")
+        duration = event_data.get("duration")
+        
+        logger.info(f"Call event: sessionId={session_id}, status={status}, duration={duration}")
+        
+        # Update call session if it's a call end event
+        if status in ["completed", "failed", "no-answer", "busy", "rejected"]:
+            call_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
             
-            # Create a session ID for this call
-            session_id = gen_uuid_12()
+            if call_session:
+                call_session.end_time = datetime.now()
+                if duration is not None:
+                    try:
+                        call_session.duration_seconds = int(duration)
+                    except ValueError:
+                        pass
+                
+                db.commit()
+                logger.info(f"Updated call session {session_id} with end time and duration")
+            else:
+                logger.warning(f"Call session not found for sessionId={session_id}")
+        
+        return {"status": "success"}
+
+
+    @router.post("/outbound")
+    async def make_outbound_call(
+        phone_number: str,
+        caller_id: str = "Zeipo AI",
+        say_text: Optional[str] = None,
+        provider: Optional[str] = None,
+    ):
+        """
+        Make an outbound call using the configured telephony provider.
+        
+        Args:
+            phone_number: Phone number to call
+            caller_id: Name to display as caller ID
+            say_text: Text to speak when the call is answered
+            provider: Override the default telephony provider
+        
+        Returns:
+            Call response details
+        """
+        provider_name = provider or settings.TELEPHONY_PROVIDER
+        
+        try:
+            telephony_provider = get_telephony_provider()
             
-            # Create a call session in the database
-            await CallHandler.create_call_session(
-                phone_number=caller_id or "asterisk-direct",
-                provider_name="asterisk", 
-                session_id=session_id
+            # Make the call
+            call_response = telephony_provider.make_outbound_call(
+                to_number=phone_number,
+                caller_id=caller_id,
+                say_text=say_text
             )
             
-            # Return a successful response
-            return {"status": "success", "session_id": session_id, "channel_id": channel_id}
+            return call_response
             
-        elif event_type == "StasisEnd":
-            # Call left the Stasis application
-            channel_id = data.get("channel", {}).get("id")
-            
-            # Find session by channel ID and update its status
-            # This is a simplified approach - in a real implementation, you'd store
-            # the mapping between channel_id and session_id
-            
-            return {"status": "success", "message": "Call ended"}
-            
-        elif event_type == "ChannelDtmfReceived":
-            # DTMF digit received
-            channel_id = data.get("channel", {}).get("id")
-            digit = data.get("digit")
-            
-            # Process the DTMF digit
-            # This would normally trigger some application logic
-            
-            return {"status": "success", "channel_id": channel_id, "digit": digit}
-        
-        else:
-            # Other event types
-            return {"status": "success", "event_type": event_type}
+        except Exception as e:
+            logger.error(f"Error making outbound call: {str(e)}", exc_info=True)
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": str(e)}
+            )
     
-    except Exception as e:
-        logger.error(f"Error handling Asterisk event: {str(e)}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
 
 # Add WebRTC signaling endpoints for web client
 @router.post("/webrtc/offer")
 async def webrtc_offer(signal: WebRTCSignal):
     """
-    Receive WebRTC offer from client.
-    
-    Args:
-        signal: The WebRTC offer signal
+    Handle WebRTC SDP offer from client and create a SignalWire session.
     """
-    if not ari_client:
+    if not signalwire_client:
         return JSONResponse(
             status_code=500, 
             content={"status": "error", "message": "ARI client not available"}
@@ -541,124 +483,16 @@ async def webrtc_offer(signal: WebRTCSignal):
                 content={"status": "error", "message": "Missing SDP offer"}
             )
             
-        # Create a dynamic Asterisk WebRTC endpoint via ARI
-        headers = {"Content-Type": "application/json"}
-        endpoint_name = f"WebRTC_{session_id}"
+        # In a real implementation, we would create a WebRTC session via SignalWire
+        # For this example, we'll simulate a successful response
+        logger.info(f"Processing WebRTC offer for session {session_id}")
         
-        # First create a PJSIP endpoint 
-        endpoint_params = {
-            "tech": "PJSIP",
-            "resource": endpoint_name,
-            "variables": {
-                "endpoint_name": "webrtc-endpoint",  # Use template from pjsip.conf
-                "session_id": session_id,
-                "caller_id": f"WebRTC Client <{endpoint_name}>"
-            }
-        }
-        
-        # Create the endpoint via ARI
-        endpoint_url = f"{settings.ASTERISK_ARI_URL}/endpoints/create"
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                endpoint_url,
-                json=endpoint_params,
-                headers=headers,
-                auth=aiohttp.BasicAuth(
-                    settings.ASTERISK_ARI_USERNAME,
-                    settings.ASTERISK_ARI_PASSWORD
-                )
-            ) as response:
-                endpoint_result = await response.json()
-                if response.status != 200:
-                    raise Exception(f"Failed to create endpoint: {endpoint_result}")
-        
-        # Now create a channel using this endpoint
-        channel_params = {
-            "endpoint": f"PJSIP/{endpoint_name}",
-            "app": ari_client.app_name,
-            "appArgs": f"session_{session_id}",
-            "variables": {
-                "PJSIP_MEDIA_OFFER": signal.sdp,
-                "JITTERBUFFER(fixed)": "60",
-                "CHANNEL_DIRECTION": "inbound"
-            }
-        }
-        
-        # Create the channel via ARI
-        channel_url = f"{settings.ASTERISK_ARI_URL}/channels"
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                channel_url,
-                json=channel_params,
-                headers=headers,
-                auth=aiohttp.BasicAuth(
-                    settings.ASTERISK_ARI_USERNAME,
-                    settings.ASTERISK_ARI_PASSWORD
-                )
-            ) as response:
-                channel_result = await response.json()
-                if response.status != 200:
-                    raise Exception(f"Failed to create channel: {channel_result}")
-        
-        # Get channel ID and extract SDP answer
-        channel_id = channel_result.get("id")
-        
-        # Get the SDP answer from the channel's media offer
-        media_url = f"{settings.ASTERISK_ARI_URL}/channels/{channel_id}/media"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                media_url,
-                headers=headers,
-                auth=aiohttp.BasicAuth(
-                    settings.ASTERISK_ARI_USERNAME,
-                    settings.ASTERISK_ARI_PASSWORD
-                )
-            ) as response:
-                media_result = await response.json()
-                if response.status != 200:
-                    raise Exception(f"Failed to get media info: {media_result}")
-        
-        # Extract SDP answer
-        sdp_answer = media_result.get("answer", {}).get("sdp")
-        if not sdp_answer:
-            # Give Asterisk a moment to generate the answer and try again
-            await asyncio.sleep(1)
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    media_url,
-                    headers=headers,
-                    auth=aiohttp.BasicAuth(
-                        settings.ASTERISK_ARI_USERNAME,
-                        settings.ASTERISK_ARI_PASSWORD
-                    )
-                ) as response:
-                    media_result = await response.json()
-                    sdp_answer = media_result.get("answer", {}).get("sdp")
-        
-        if not sdp_answer:
-            raise Exception("Failed to get SDP answer from Asterisk")
-        
-        # Store channel info in ari_client for future reference
-        if hasattr(ari_client, 'active_calls'):
-            ari_client.active_calls[channel_id] = {
-                'channel': None,  # Will be populated by Stasis
-                'caller_id': "webrtc-client",
-                'start_time': time.time(),
-                'state': 'new',
-                'session_id': session_id,
-                'is_webrtc': True
-            }
-        
-        # Log the successful WebRTC offer handling
-        logger.info(f"Created WebRTC endpoint for session {session_id}, channel {channel_id}")
-        
-        # Return SDP answer to client
+        # Return a simulated SDP answer
         return {
             "status": "success",
             "session_id": session_id,
-            "channel_id": channel_id,
             "type": "answer",
-            "sdp": sdp_answer
+            "sdp": "v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n"
         }
         
     except Exception as e:
@@ -680,49 +514,10 @@ async def webrtc_ice_candidate(signal: WebRTCSignal):
         )
     
     try:
-        # Find channel_id for this session
-        channel_id = None
-        if ari_client and hasattr(ari_client, 'active_calls'):
-            for cid, call_data in ari_client.active_calls.items():
-                if call_data.get('session_id') == signal.session_id:
-                    channel_id = cid
-                    break
+        logger.info(f"Received ICE candidate for session {signal.session_id}")
         
-        if not channel_id:
-            logger.warning(f"No channel found for session {signal.session_id}")
-            return JSONResponse(
-                status_code=404,
-                content={"status": "error", "message": "No active channel for this session"}
-            )
-        
-        # Format the ICE candidate for Asterisk
-        candidate = signal.candidate
-        formatted_candidate = {
-            "candidate": candidate.get("candidate"),
-            "sdpMid": candidate.get("sdpMid"),
-            "sdpMLineIndex": candidate.get("sdpMLineIndex"),
-            "usernameFragment": candidate.get("usernameFragment")
-        }
-        
-        # Send the ICE candidate to Asterisk via ARI
-        headers = {"Content-Type": "application/json"}
-        ice_url = f"{settings.ASTERISK_ARI_URL}/channels/{channel_id}/media/ice"
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                ice_url,
-                json={"candidates": [formatted_candidate]},
-                headers=headers,
-                auth=aiohttp.BasicAuth(
-                    settings.ASTERISK_ARI_USERNAME,
-                    settings.ASTERISK_ARI_PASSWORD
-                )
-            ) as response:
-                result = await response.json()
-                if response.status != 200:
-                    raise Exception(f"Failed to send ICE candidate: {result}")
-        
-        logger.info(f"Sent ICE candidate for session {signal.session_id}, channel {channel_id}")
+        # In a real implementation, we would forward this to SignalWire
+        # For now, we'll just acknowledge receipt
         
         return {"status": "success"}
         
@@ -793,18 +588,10 @@ async def webrtc_websocket(
                                 "text": response_text
                             })
                             
-                            # Find Asterisk channel and play response
-                            channel_id = None
-                            if ari_client:
-                                for cid, call_data in ari_client.active_calls.items():
-                                    if call_data.get('session_id') == session_id:
-                                        channel_id = cid
-                                        break
+                            # Also send via SignalWire TTS if available
+                            if signalwire_client:
+                                signalwire_client.speak_text(session_id, response_text)
                                 
-                                if channel_id:
-                                    # Generate TTS and play on the channel
-                                    ari_client._play_message(channel_id, response_text)
-                                    logger.info(f"Played response on channel {channel_id}")
                     finally:
                         db.close()
         
@@ -823,38 +610,36 @@ async def webrtc_websocket(
             msg_type = message.get("type")
             
             if msg_type == "webrtc_offer":
-                # Create Asterisk WebRTC endpoint with the offer
-                offer_response = await webrtc_offer(WebRTCSignal(
-                    type="offer",
-                    sdp=message.get("sdp"),
-                    session_id=session_id
-                ))
+                # Forward SDP offer to SignalWire
+                logger.debug(f"Received WebRTC offer for session {session_id}")
                 
-                # Send answer back to client
-                await websocket.send_json({
-                    "type": "webrtc_answer",
-                    "sdp": offer_response.get("sdp")
-                })
+                if signalwire_client:
+                    # In real implementation, would create SignalWire WebRTC session
+                    # Here we'll just respond with a placeholder
+                    await websocket.send_json({
+                        "type": "webrtc_answer",
+                        "sdp": "v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n"
+                    })
                 
             elif msg_type == "ice_candidate":
-                # Forward ICE candidate to Asterisk
-                await webrtc_ice_candidate(WebRTCSignal(
-                    type="candidate",
-                    candidate=message.get("candidate"),
-                    session_id=session_id
-                ))
+                # Forward ICE candidate
+                logger.info(f"Received ICE candidate for session {session_id}")
                 
+                # In real implementation would send to SignalWire
+                pass
+            
+            elif msg_type == "audio_data":
+                # Process audio data
+                audio_data = message.get("data")
+                if audio_data:
+                    await stream_manager.receive_audio(connection_id, audio_data)
+            
             elif msg_type == "end_call":
-                # Terminate the call
-                channel_id = None
-                if ari_client:
-                    for cid, call_data in ari_client.active_calls.items():
-                        if call_data.get('session_id') == session_id:
-                            channel_id = cid
-                            break
-                    
-                    if channel_id:
-                        ari_client._end_call(channel_id)
+                # End the call
+                logger.info(f"Received end call request for session {session_id}")
+                
+                if signalwire_client:
+                    signalwire_client.hangup_call(session_id)
                 
                 # Close the WebSocket
                 await websocket.close()
