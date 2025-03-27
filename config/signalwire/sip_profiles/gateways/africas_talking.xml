@@ -1,0 +1,10 @@
+<gateway name="africas_talking">
+  <param name="realm" value="ke.sip.africastalking.com"/>
+  <!-- TODO: Use real credentials -->
+  <param name="username" value="YOUR_AT_USERNAME"/> 
+  <param name="password" value="YOUR_AT_PASSWORD"/>
+  <param name="proxy" value="ke.sip.africastalking.com"/>
+  <param name="register" value="true"/>
+  <param name="caller-id-in-from" value="true"/>
+  <param name="from-domain" value="ke.sip.africastalking.com"/>
+</gateway>

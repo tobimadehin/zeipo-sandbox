@@ -1,4 +1,6 @@
 # app/main.py
+import json
+import os
 from fastapi.responses import FileResponse
 import torch
 from fastapi import FastAPI
@@ -6,8 +8,9 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 
 from db.session import create_db_and_tables
+from src.telephony import get_telephony_provider
 from src.api import stt
-from src.asterisk.ari_client import ZeipoARIClient
+from src.telephony.clients.signalwire_client import SignalWireClient
 from src.nlu import intent_understanding
 from src.api import calls, stt, system, tts, websockets, telephony
 from config import settings
@@ -15,14 +18,14 @@ from static.constants import logger
 
 app = FastAPI(title="Zeipo.ai API")
 
-# Global ARI client
-ari_client = None
+# Global SignalWire client
+signalwire_client = None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 def startup_event():
-    global ari_client
+    global signalwire_client
     
     # Setup database schema
     create_db_and_tables()
@@ -31,13 +34,15 @@ def startup_event():
     import os
     os.makedirs("logs/calls", exist_ok=True)
     
-    # Start ARI client
-    try:
-        ari_client = ZeipoARIClient()
-        ari_client.start()
-        logger.info("ARI client started successfully")
-    except Exception as e:
-        logger.error(f"Failed to start ARI client: {str(e)}", exc_info=True)
+    # Initialize SignalWire if it's the configured provider
+    if settings.TELEPHONY_PROVIDER == "signalwire":
+        try:
+            from src.telephony import get_telephony_provider
+            signalwire_client = get_telephony_provider()
+            logger.info("SignalWire client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize SignalWire client: {str(e)}", exc_info=True)
+            
 
 # Root endpoint from original api.py
 @app.get("/")

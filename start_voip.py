@@ -56,7 +56,7 @@ def get_potential_ips() -> List[str]:
 def setup_environment(host: str, port: int) -> None:
     """Set up environment variables for VoIP simulator."""
     # Configure server variables
-    os.environ['WEBHOOK_URL'] = f"http://{host}:{port}"
+    os.environ['BASE_URL'] = f"http://{host}:{port}"
     os.environ['WS_URL'] = f"ws://{host}:{port}/api/v1/ws"
     
     # Set telephony provider to VoIP simulator

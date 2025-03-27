@@ -5,13 +5,17 @@ import time
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Optional
 import asyncio
+from fastapi.websockets import WebSocketState
 import numpy as np
 
+from db.session import SessionLocal
+from src.api.telephony import WebRTCSignal, webrtc_ice_candidate, webrtc_offer
 from static.constants import logger
 from src.streaming.audio_streaming import AudioStreamManager
 from src.nlp.intent_processor import IntentProcessor
 from src.api.router import create_router
 from src.utils.helpers import convert_opus_to_pcm, gen_uuid_12, gen_uuid_16
+from ...main import ari_client
 
 # Create audio stream manager
 stream_manager = AudioStreamManager()
@@ -87,6 +91,7 @@ async def websocket_audio_endpoint(
         logger.error(f"Error in WebSocket connection: {str(e)}", exc_info=True)
         if connection_id:
             await stream_manager.disconnect(connection_id)
+
 
 # Function to start cleanup task
 async def start_cleanup_task():

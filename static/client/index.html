@@ -1,621 +1,338 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>WebSocket Audio Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeipo WebRTC Client</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
+            background-color: #f5f5f5;
         }
-
-        h1 {
-            color: #333;
-        }
-
+        
         .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #4a4a4a;
+            text-align: center;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .controls {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-        }
-
-        .control-panel {
-            display: flex;
             gap: 10px;
-            margin-bottom: 10px;
+            margin: 20px 0;
         }
-
+        
         button {
-            padding: 10px 15px;
-            background-color: #4CAF50;
-            color: white;
+            padding: 10px;
             border: none;
             border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
             cursor: pointer;
+            font-size: 16px;
         }
-
+        
         button:hover {
             background-color: #45a049;
         }
-
+        
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
-
-        #status {
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 10px;
-        }
-
-        .connected {
-            background-color: #d4edda;
-            color: #155724;
-        }
-
-        .disconnected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-
-        .pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-
-        #messages {
-            height: 300px;
-            overflow-y: auto;
+        
+        .log-container {
+            margin-top: 20px;
             border: 1px solid #ddd;
             padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
             background-color: #f9f9f9;
         }
-
-        .message {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .sent {
-            color: #0066cc;
-        }
-
-        .received {
-            color: #006600;
-        }
-
-        .error {
-            color: #cc0000;
-        }
-
-        .settings {
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 20px;
-            background-color: #f5f5f5;
-        }
-
-        .settings label {
-            display: block;
-            margin-bottom: 10px;
-        }
-
-        .settings input {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-        }
-
-        audio {
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        #audioControls {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        meter {
-            width: 100%;
-            height: 20px;
-        }
-
-        .transcription {
+        
+        .transcript-container {
             margin-top: 20px;
             padding: 10px;
-            background-color: #e9ecef;
+            border: 1px solid #ddd;
             border-radius: 4px;
+            min-height: 100px;
+            background-color: #fff;
+        }
+        
+        .transcript {
+            font-style: italic;
+            color: #666;
+        }
+        
+        .response {
+            font-weight: bold;
+            color: #4a4a4a;
+            margin-top: 10px;
         }
     </style>
 </head>
-
 <body>
-    <h1>WebSocket Audio Streaming Test</h1>
-
     <div class="container">
-        <div class="settings">
-            <h3>Connection Settings</h3>
-            <label>
-                Server URL:
-                <input type="text" id="serverUrl"
-                    value="ws://spanish-dates-alt-dept.trycloudflare.com/api/v1/telephony/voice/ws">
-            </label>
+        <h1>Zeipo SignalWire WebRTC Client</h1>
+        
+        <div id="connectionStatus" class="status disconnected">
+            Disconnected
         </div>
-
-        <div id="status" class="disconnected">Disconnected</div>
-
-        <div class="control-panel">
-            <button id="connectBtn">Connect</button>
-            <button id="disconnectBtn" disabled>Disconnect</button>
+        
+        <div class="controls">
+            <button id="connectButton">Connect</button>
+            <button id="disconnectButton" disabled>Disconnect</button>
         </div>
-
-        <div id="audioControls">
-            <h3>Audio Recording</h3>
-            <div>
-                <button id="startRecording" disabled>Start Recording</button>
-                <button id="stopRecording" disabled>Stop Recording</button>
-            </div>
-            <div>
-                <p>Audio level:</p>
-                <meter id="audioMeter" min="0" max="1" value="0"></meter>
-            </div>
-            <div>
-                <p>Preview recorded audio:</p>
-                <audio id="audioPlayback" controls></audio>
-            </div>
+        
+        <div class="transcript-container">
+            <h3>Conversation</h3>
+            <div id="transcript" class="transcript">Waiting for your voice input...</div>
+            <div id="response" class="response"></div>
         </div>
-
-        <div class="transcription">
-            <h3>Transcription</h3>
-            <div id="transcription">No transcription yet...</div>
+        
+        <div class="log-container">
+            <div id="log"></div>
         </div>
-
-        <h3>Messages</h3>
-        <div id="messages"></div>
+        
+        <audio id="remoteAudio" autoplay></audio>
     </div>
-
+    
+    <script src="https://cdn.jsdelivr.net/npm/verto-client/dist/vertoClient.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Get the current URL
-            const currentUrl = window.location.href;
-
-            // Parse the URL
-            const url = new URL(currentUrl);
-
-            // Create WebSocket URL by changing the protocol and adding the path
-            const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${url.host}/api/v1/telephony/voice/ws`;
-
-            // Set the input value
-            document.getElementById('serverUrl').value = wsUrl;
-        });
-
+        // SignalWire/Verto client configuration
+        const config = {
+            host: window.location.hostname,
+            port: 5080,
+            socketUrl: `wss://${window.location.hostname}:5081`,
+            login: '1000',  // Extension number
+            passwd: 'your_secure_password',
+            callerId: 'Zeipo WebRTC User',
+            ICEServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        };
+        
         // DOM Elements
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const statusDisplay = document.getElementById('status');
-        const messagesContainer = document.getElementById('messages');
-        const serverUrlInput = document.getElementById('serverUrl');
-        const startRecordingBtn = document.getElementById('startRecording');
-        const stopRecordingBtn = document.getElementById('stopRecording');
-        const audioMeter = document.getElementById('audioMeter');
-        const audioPlayback = document.getElementById('audioPlayback');
-        const transcriptionDisplay = document.getElementById('transcription');
-
-        // WebSocket connection
-        let socket;
-        let isConnected = false;
-
-        // Audio recording variables
-        let mediaRecorder;
-        let audioContext;
-        let analyser;
-        let microphone;
-        let audioChunks = [];
-        let isRecording = false;
-
-        // Sample rate and audio format constants
-        const SAMPLE_RATE = 16000;  // Whisper expects 16kHz
-        const CHANNELS = 1;         // Mono audio
-        const BIT_DEPTH = 16;       // 16-bit PCM
-
-        // Initialize audio context
-        function initAudio() {
-            try {
-                window.AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-
-                // Create audio level analyzer
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256;
-
-                return true;
-            } catch (e) {
-                addMessage(`Error initializing audio: ${e.message}`, 'error');
-                return false;
-            }
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const logElement = document.getElementById('log');
+        const transcriptElement = document.getElementById('transcript');
+        const responseElement = document.getElementById('response');
+        const remoteAudio = document.getElementById('remoteAudio');
+        
+        // State management
+        let vertoClient = null;
+        let currentCall = null;
+        let localStream = null;
+        let sessionId = null;
+        
+        // Event Listeners
+        connectButton.addEventListener('click', connect);
+        disconnectButton.addEventListener('click', disconnect);
+        
+        // Functions
+        function log(message) {
+            const entry = document.createElement('div');
+            entry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            logElement.appendChild(entry);
+            logElement.scrollTop = logElement.scrollHeight;
         }
-
-        // Request microphone access
-        async function getMicrophone() {
+        
+        function updateStatus(status, message) {
+            connectionStatus.className = `status ${status}`;
+            connectionStatus.textContent = message;
+        }
+        
+        async function connect() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: SAMPLE_RATE,
-                        channelCount: CHANNELS
-                    }
+                updateStatus('connecting', 'Connecting...');
+                
+                // Generate session ID
+                sessionId = 'web_' + Math.random().toString(36).substring(2, 15);
+                
+                // Get user media for microphone
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Initialize Verto client
+                vertoClient = new window.vertoClient(config);
+                
+                // Setup event handlers
+                vertoClient.on('login.success', () => {
+                    log('Verto client logged in successfully');
+                    makeCall();
                 });
-
-                // Connect microphone to analyzer for level meter
-                microphone = audioContext.createMediaStreamSource(stream);
-                microphone.connect(analyser);
-
-                startRecordingBtn.disabled = false;
-
-                // Start updating audio meter
-                updateAudioMeter();
-
-                return stream;
-            } catch (e) {
-                addMessage(`Error accessing microphone: ${e.message}`, 'error');
-                return null;
+                
+                vertoClient.on('login.failed', (err) => {
+                    log(`Login failed: ${err.message}`);
+                    updateStatus('disconnected', 'Login failed');
+                });
+                
+                vertoClient.on('socket.close', () => {
+                    log('Socket connection closed');
+                    updateStatus('disconnected', 'Disconnected');
+                    resetCallState();
+                });
+                
+                // Login to SignalWire
+                await vertoClient.login();
+                
+            } catch (error) {
+                log(`Connection error: ${error.message}`);
+                updateStatus('disconnected', 'Connection failed');
             }
         }
-
-        // Update audio level meter
-        function updateAudioMeter() {
-            if (!analyser) return;
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            function update() {
-                if (!analyser) return;
-
-                analyser.getByteFrequencyData(dataArray);
-                let sum = 0;
-                for (let i = 0; i < dataArray.length; i++) {
-                    sum += dataArray[i];
-                }
-                const average = sum / dataArray.length / 255;
-                audioMeter.value = average;
-
-                requestAnimationFrame(update);
-            }
-
-            update();
-        }
-
-        // Start audio recording
-        function startRecording(stream) {
-            audioChunks = [];
-            isRecording = true;
-
-            // Create audio source from stream
-            const source = audioContext.createMediaStreamSource(stream);
-
-            // Capture raw PCM data from microphone
-            const processor = audioContext.createScriptProcessor(4096, 1, 1);
-
-            // Connect to analyzer for level meter
-            source.connect(analyser);
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-
-            // Store for cleanup
-            window.activeProcessor = processor;
-
-            processor.onaudioprocess = (e) => {
-                if (!isRecording) return;
-
-                // Get raw PCM data
-                const pcmData = e.inputBuffer.getChannelData(0);
-
-                // Convert to 16-bit PCM (Whisper format)
-                const int16Data = new Int16Array(pcmData.length);
-                for (let i = 0; i < pcmData.length; i++) {
-                    int16Data[i] = Math.max(-1, Math.min(1, pcmData[i])) * 32767;
-                }
-
-                // Store for playback
-                audioChunks.push(int16Data.buffer);
-
-                // Send raw 16-bit PCM directly
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    let data = int16Data.buffer
-                    socket.send(data);
-                    addMessage(`Sent ${int16Data.length} samples of audio data`);
-                }
-            };
-
-            startRecordingBtn.disabled = true;
-            stopRecordingBtn.disabled = false;
-            addMessage('Recording started', 'sent');
-        }
-
-        function stopRecording() {
-            if (isRecording) {
-                isRecording = false;
-
-                // Disconnect processor
-                if (window.activeProcessor) {
-                    window.activeProcessor.disconnect();
-                    window.activeProcessor = null;
-                }
-
-                startRecordingBtn.disabled = false;
-                stopRecordingBtn.disabled = true;
-
-                // Convert PCM to WAV for playback
-                const wav = createWavFromPcm(audioChunks);
-                const audioBlob = new Blob([wav], { type: 'audio/wav' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                audioPlayback.src = audioUrl;
-
-                addMessage('Recording stopped', 'sent');
-            }
-        }
-
-        // Helper function to create WAV from PCM chunks
-        function createWavFromPcm(pcmChunks) {
-            // Calculate total length
-            let totalLength = 0;
-            for (const chunk of pcmChunks) {
-                totalLength += chunk.byteLength;
-            }
-
-            // Create header
-            const wavHeader = new ArrayBuffer(44);
-            const view = new DataView(wavHeader);
-
-            // "RIFF" chunk descriptor
-            view.setUint8(0, "R".charCodeAt(0));
-            view.setUint8(1, "I".charCodeAt(0));
-            view.setUint8(2, "F".charCodeAt(0));
-            view.setUint8(3, "F".charCodeAt(0));
-
-            view.setUint32(4, 36 + totalLength, true);
-
-            // "WAVE" format
-            view.setUint8(8, "W".charCodeAt(0));
-            view.setUint8(9, "A".charCodeAt(0));
-            view.setUint8(10, "V".charCodeAt(0));
-            view.setUint8(11, "E".charCodeAt(0));
-
-            // "fmt " sub-chunk
-            view.setUint8(12, "f".charCodeAt(0));
-            view.setUint8(13, "m".charCodeAt(0));
-            view.setUint8(14, "t".charCodeAt(0));
-            view.setUint8(15, " ".charCodeAt(0));
-
-            view.setUint32(16, 16, true);           // Subchunk1Size (16 for PCM)
-            view.setUint16(20, 1, true);            // AudioFormat (1 for PCM)
-            view.setUint16(22, 1, true);            // NumChannels (1 for mono)
-            view.setUint32(24, 16000, true);        // SampleRate (16kHz)
-            view.setUint32(28, 16000 * 2, true);    // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-            view.setUint16(32, 2, true);            // BlockAlign (NumChannels * BitsPerSample/8)
-            view.setUint16(34, 16, true);           // BitsPerSample (16 bits)
-
-            // "data" sub-chunk
-            view.setUint8(36, "d".charCodeAt(0));
-            view.setUint8(37, "a".charCodeAt(0));
-            view.setUint8(38, "t".charCodeAt(0));
-            view.setUint8(39, "a".charCodeAt(0));
-
-            view.setUint32(40, totalLength, true);  // Subchunk2Size
-
-            // Create final buffer with header + all PCM data
-            const wavBuffer = new Uint8Array(wavHeader.byteLength + totalLength);
-            wavBuffer.set(new Uint8Array(wavHeader), 0);
-
-            let offset = wavHeader.byteLength;
-            for (const chunk of pcmChunks) {
-                wavBuffer.set(new Uint8Array(chunk), offset);
-                offset += chunk.byteLength;
-            }
-
-            return wavBuffer.buffer;
-        }
-
-        // Convert audio data for Whisper format
-        async function convertAudioForWhisper(audioChunks) {
-            const blob = new Blob(audioChunks, { type: 'audio/webm; codecs=opus' });
-
-            // Here we would normally convert the audio to the right format for Whisper
-            // This is a simplified version - in a real application, you would want to:
-            // 1. Convert to PCM 16-bit mono at 16kHz
-            // 2. Convert to the right byte order
-
-            // For simplicity in this test, we're just sending the raw audio data
-            // and letting the server handle conversion
-
-            const arrayBuffer = await blob.arrayBuffer();
-            return arrayBuffer;
-        }
-
-        // Connect to WebSocket server
-        function connect() {
-            const url = serverUrlInput.value;
-
-            if (!url) {
-                addMessage('Please enter a server URL', 'error');
-                return;
-            }
-
+        
+        async function makeCall() {
             try {
-                statusDisplay.className = 'pending';
-                statusDisplay.textContent = 'Connecting...';
-
-                // Create WebSocket connection
-                socket = new WebSocket(url);
-
-                // Connection opened
-                socket.onopen = function (event) {
-                    isConnected = true;
-
-                    statusDisplay.className = 'connected';
-                    statusDisplay.textContent = 'Connected';
-
-                    connectBtn.disabled = true;
-                    disconnectBtn.disabled = false;
-
-                    addMessage('Connection established!', 'received');
-
-                    // Send identification message
-                    const initMessage = {
-                        client_type: "browser_test",
-                        protocol_version: "1.0"
-                    };
-
-                    socket.send(JSON.stringify(initMessage));
-                    addMessage(`Sent identification: ${JSON.stringify(initMessage)}`, 'sent');
-
-                    // Initialize audio
-                    if (!microphone && initAudio()) {
-                        // Request microphone access only if not already granted
-                        getMicrophone().then(stream => {
-                            if (stream) {
-                                addMessage('Microphone access granted', 'received');
-                            }
+                // Call parameters
+                const callOptions = {
+                    destinationNumber: '9000',  // Extension for Zeipo AI
+                    caller_id_name: 'Zeipo WebRTC User',
+                    caller_id_number: sessionId,
+                    useVideo: false,
+                    useAudio: true,
+                    useStereo: false
+                };
+                
+                // Create the call
+                currentCall = vertoClient.newCall(callOptions);
+                
+                // Call event handlers
+                currentCall.on('ringing', () => {
+                    log('Call is ringing');
+                });
+                
+                currentCall.on('answered', () => {
+                    log('Call was answered');
+                    updateStatus('connected', 'Connected');
+                    connectButton.disabled = true;
+                    disconnectButton.disabled = false;
+                    
+                    // Add local stream to the call
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => {
+                            currentCall.addTrack(track, localStream);
                         });
                     }
-                };
-
-                // Listen for messages
-                socket.onmessage = function (event) {
-                    if (event.data instanceof Blob) {
-                        // Handle binary audio data from the server
-                        addMessage(`Received audio response (${event.data.size} bytes)`, 'received');
-
-                        // Create an audio element to play the response
-                        const audioUrl = URL.createObjectURL(event.data);
-                        const audio = new Audio(audioUrl);
-                        audio.onended = function () {
-                            URL.revokeObjectURL(audioUrl);  // Clean up
-                        };
-                        audio.play();
-                    } else {
-                        // Handle text/JSON messages
-                        addMessage(`Received: ${event.data}`, 'received');
-
-                        try {
-                            const data = JSON.parse(event.data);
-
-                            // Check for transcription results
-                            if (data.type === 'transcription' && data.text) {
-                                transcriptionDisplay.textContent = data.text;
-                            }
-                            // Check for response text (for debugging)
-                            else if ((data.type === 'response' || data.type === 'greeting') && data.text) {
-                                addMessage(`AI: ${data.text}`, 'response');
-                            }
-                        } catch (e) {
-                            // Not JSON data
-                            console.log('Received non-JSON data');
-                        }
-                    }
-                };
-
-                // Connection closed
-                socket.onclose = function (event) {
-                    isConnected = false;
-
-                    statusDisplay.className = 'disconnected';
-
-                    connectBtn.disabled = false;
-                    disconnectBtn.disabled = true;
-                    startRecordingBtn.disabled = true;
-                    stopRecordingBtn.disabled = true;
-
-                    if (event.wasClean) {
-                        statusDisplay.textContent = `Disconnected: ${event.code} - ${event.reason}`;
-                        addMessage(`Connection closed cleanly, code=${event.code} reason=${event.reason}`, 'received');
-                    } else {
-                        statusDisplay.textContent = 'Connection lost';
-                        addMessage('Connection died', 'error');
-                    }
-
-                    // Clean up audio resources
-                    if (microphone) {
-                        microphone.disconnect();
-                        microphone = null;
-                    }
-
-                    if (analyser) {
-                        analyser = null;
-                    }
-
-                    if (audioContext) {
-                        audioContext.close();
-                        audioContext = null;
-                    }
-                };
-
-                // Connection error
-                socket.onerror = function (error) {
-                    statusDisplay.className = 'disconnected';
-                    statusDisplay.textContent = 'Error';
-
-                    addMessage(`WebSocket error: ${error.message || 'Unknown error'}`, 'error');
-                };
-
-            } catch (error) {
-                statusDisplay.className = 'disconnected';
-                statusDisplay.textContent = 'Error';
-
-                addMessage(`Error creating WebSocket: ${error.message}`, 'error');
-            }
-        }
-
-        // Disconnect from WebSocket server
-        function disconnect() {
-            if (socket) {
-                if (isRecording) {
-                    stopRecording();
-                }
-
-                socket.close();
-            }
-        }
-
-        // Add message to the log
-        function addMessage(message, type = 'info') {
-            const messageElement = document.createElement('div');
-            messageElement.className = `message ${type}`;
-            messageElement.textContent = message;
-
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-
-        // Event Listeners
-        connectBtn.addEventListener('click', connect);
-        disconnectBtn.addEventListener('click', disconnect);
-        startRecordingBtn.addEventListener('click', () => {
-            if (microphone) {
-                startRecording(microphone.mediaStream);
-            } else {
-                getMicrophone().then(stream => {
-                    if (stream) {
-                        startRecording(stream);
+                });
+                
+                currentCall.on('ended', () => {
+                    log('Call ended');
+                    updateStatus('disconnected', 'Call ended');
+                    resetCallState();
+                });
+                
+                currentCall.on('error', (error) => {
+                    log(`Call error: ${error.message}`);
+                    updateStatus('disconnected', 'Call error');
+                    resetCallState();
+                });
+                
+                // Handle incoming audio/video tracks
+                currentCall.on('track', (event) => {
+                    log(`Received ${event.track.kind} track`);
+                    if (event.track.kind === 'audio') {
+                        const stream = new MediaStream([event.track]);
+                        remoteAudio.srcObject = stream;
                     }
                 });
+                
+                // Handle transcript updates from SignalWire speech detection
+                currentCall.on('info', (params) => {
+                    if (params.speechResult) {
+                        transcriptElement.textContent = params.speechResult;
+                    }
+                    if (params.aiResponse) {
+                        responseElement.textContent = params.aiResponse;
+                    }
+                });
+                
+                // Make the call
+                await currentCall.answer();
+                log('Call initiated');
+                
+            } catch (error) {
+                log(`Error making call: ${error.message}`);
+                updateStatus('disconnected', 'Call failed');
             }
-        });
-        stopRecordingBtn.addEventListener('click', stopRecording);
-
-        // Add some initial messages
-        addMessage('WebSocket Audio Test ready. Click "Connect" to begin.', 'info');
+        }
+        
+        function resetCallState() {
+            // Clean up call resources
+            if (currentCall) {
+                try {
+                    currentCall.hangup();
+                } catch (e) {}
+                currentCall = null;
+            }
+            
+            // Clean up local media
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            // Reset UI
+            connectButton.disabled = false;
+            disconnectButton.disabled = true;
+        }
+        
+        function disconnect() {
+            log('Disconnecting...');
+            
+            // Hang up call
+            if (currentCall) {
+                currentCall.hangup();
+            }
+            
+            // Logout from Verto
+            if (vertoClient) {
+                vertoClient.logout();
+            }
+            
+            resetCallState();
+            updateStatus('disconnected', 'Disconnected');
+        }
+        
+        // Initialize
+        log('WebRTC client initialized');
+        updateStatus('disconnected', 'Ready to connect');
     </script>
 </body>
-
 </html>

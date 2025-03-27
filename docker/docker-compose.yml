@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     runtime: nvidia
     env_file:
-      - .env
+      - ../.env
     deploy:
       resources:
         reservations:
@@ -25,33 +25,39 @@ services:
     networks:
       - zeipo-network
     depends_on:
-      - asterisk
+      - signalwire
       - redis
 
-  asterisk:
-    image: andrius/asterisk:alpine-latest-20.5.2
-    container_name: zeipo-asterisk
+  signalwire:
+    image: signalwire/freeswitch-public-base
+    container_name: zeipo-signalwire
     ports:
-      - "5060:5060/udp"  # SIP
-      - "5060:5060/tcp"  # SIP (TCP)
-      - "5061:5061/tcp"  # SIP/TLS
-      - "10000-20000:10000-20000/udp"  # RTP media
-      - "8088:8088"  # ARI HTTP API
-      - "8089:8089"  # ARI WebSocket
+      - "5060:5060/udp"  # SIP UDP
+      - "5060:5060/tcp"  # SIP TCP
+      - "5061:5061/tcp"  # SIP TLS
+      - "5080:5080/tcp"  # WebSocket signaling
+      - "8082:8082/tcp"  # Event Socket
+      - "16384-16484:16384-16484/udp"  # RTP media ports
     volumes:
-      - ./config/asterisk/config:/etc/asterisk
-      - ./config/asterisk/sounds:/var/lib/asterisk/sounds
-      - ./config/asterisk/spool:/var/spool/asterisk
-      - ./config/asterisk/keys:/etc/asterisk/keys
-      - ./config/asterisk/log:/var/log/asterisk
-    env_file:
-      - .env
+      - signalwire-conf:/etc/freeswitch
+      - signalwire-recordings:/var/lib/freeswitch/recordings
+      - signalwire-storage:/var/lib/freeswitch/storage
+    environment:
+      - SIGNALWIRE_USERNAME=zeipo
+      - SIGNALWIRE_PASSWORD=zeipo123 # This is for local development only
     networks:
       - zeipo-network
     restart: unless-stopped
+    shm_size: '256mb'
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
 
   redis:
     image: redis:alpine
+    container_name: zeipo-redis
     ports:
       - "6379:6379"
     volumes:
@@ -63,3 +69,8 @@ services:
 networks:
   zeipo-network:
     driver: bridge
+
+volumes:
+  signalwire-conf:
+  signalwire-recordings:
+  signalwire-storage:

@@ -775,10 +775,10 @@ switch ($Command) {
             if (Test-Path $envPath) {
                 $envContent = Get-Content $envPath
                 
-                if ($envContent -match "WEBHOOK_URL=") {
-                    $envContent = $envContent -replace "WEBHOOK_URL=.*", "WEBHOOK_URL=$webhookUrl"
+                if ($envContent -match "BASE_URL=") {
+                    $envContent = $envContent -replace "BASE_URL=.*", "BASE_URL=$webhookUrl"
                 } else {
-                    $envContent += "`nWEBHOOK_URL=$webhookUrl"
+                    $envContent += "`nBASE_URL=$webhookUrl"
                 }
                 
                 Set-Content -Path $envPath -Value $envContent
@@ -819,7 +819,7 @@ switch ($Command) {
         $cmd += " -e DEFAULT_TELEPHONY_PROVIDER=$provider"
         
         if ($webhookUrl) {
-            $cmd += " -e WEBHOOK_URL=$webhookUrl"
+            $cmd += " -e BASE_URL=$webhookUrl"
             $cmd += " -e WS_URL=$wsUrl"
         }
         

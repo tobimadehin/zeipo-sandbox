@@ -1,0 +1,28 @@
+<profile name="external">
+  <settings>
+    <param name="context" value="public"/>
+    <param name="rtp-ip" value="auto"/>
+    <param name="sip-ip" value="auto"/>
+    <param name="ext-rtp-ip" value="auto"/>
+    <param name="ext-sip-ip" value="auto"/>
+    <param name="sip-port" value="5060"/>
+    <param name="tls-sip-port" value="5061"/>
+    <param name="ws-binding" value=":5080"/>
+    <param name="wss-binding" value=":5081"/>
+    
+    <!-- WebRTC Support -->
+    <param name="liberal-dtmf" value="true"/>
+    <param name="enable-timer" value="false"/>
+    <param name="rtp-timeout-sec" value="300"/>
+    <param name="dtmf-duration" value="2000"/>
+    <param name="inbound-codec-prefs" value="OPUS,G722,PCMU,PCMA"/>
+    <param name="outbound-codec-prefs" value="OPUS,G722,PCMU,PCMA"/>
+    <param name="enable-3pcc" value="true"/>
+    
+    <!-- TLS Settings -->
+    <param name="tls" value="true"/>
+    <param name="tls-version" value="tlsv1.2"/>
+    <param name="tls-cert-dir" value="/etc/freeswitch/tls"/>
+    <param name="tls-verify-date" value="false"/>
+  </settings>
+</profile>

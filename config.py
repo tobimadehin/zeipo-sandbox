@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     AT_SIP_USERNAME: str = ""  
     AT_SIP_PASSWORD: str = "" 
 
-    WEBHOOK_URL: str = "http://localhost:8000"
+    BASE_URL: str = "http://localhost:8000"
     
     WS_URL: str = "ws://localhost:8000/api/v1/ws"
     
@@ -37,12 +37,16 @@ class Settings(BaseSettings):
     GF_USERS_ALLOW_SIGN_UP: bool = False
     GF_INSTALL_PLUGINS: str = ""
     
-    ASTERISK_ARI_URL: str = ""
-    ASTERISK_ARI_USERNAME: str = ""
-    ASTERISK_ARI_PASSWORD: str = ""
+    WEBRTC_TURN_USERNAME: str = ""
+    WEBRTC_TURN_PASSWORD: str = ""
     
-    ASTERISK_UID=1000
-    ASTERISK_GID=1000
+    SIGNALWIRE_API_KEY: str = ""
+    SIGNALWIRE_HOST: str = ""
+    SIGNALWIRE_PORT: int = 8082
+    SIGNALWIRE_EVENT_PORT: int = 8084
+    SIGNALWIRE_USERNAME: str = ""
+    SIGNALWIRE_PASSWORD: str = ""
+    SIGNALWIRE_ENV: str = ""
     
     class Config:
         env_file = ".env"

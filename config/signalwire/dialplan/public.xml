@@ -1,0 +1,21 @@
+<context name="public">
+  <!-- Route incoming calls to Zeipo AI -->
+  <extension name="inbound_calls">
+    <condition field="destination_number" expression="^(.*)$">
+      <action application="set" data="session_id=${uuid}"/>
+      <action application="set" data="direction=inbound"/>
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <action application="javascript" data="/etc/freeswitch/scripts/zeipo_handler.js"/>
+    </condition>
+  </extension>
+  
+  <!-- Route outbound calls -->
+  <extension name="outbound_calls">
+    <condition field="destination_number" expression="^(\+\d+)$">
+      <action application="set" data="effective_caller_id_number=${outbound_caller_id_number}"/>
+      <action application="set" data="effective_caller_id_name=${outbound_caller_id_name}"/>
+      <action application="bridge" data="sofia/gateway/africas_talking/$1"/>
+    </condition>
+  </extension>
+</context>

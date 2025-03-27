@@ -66,7 +66,7 @@ class AfricasTalkingProvider(TelephonyProvider):
                 tts_provider.save_to_file(audio_content, file_path)
                 
                 # Use the webhook base URL to create a public URL
-                audio_url = f"{settings.WEBHOOK_URL}{settings.API_V1_STR}/tts/audio/{filename}"
+                audio_url = f"{settings.BASE_URL}{settings.API_V1_STR}/tts/audio/{filename}"
                 
                 # Use Play instead of Say for TTS audio
                 response += f'<Play url="{audio_url}"/>'
@@ -149,7 +149,7 @@ class AfricasTalkingProvider(TelephonyProvider):
         """
         try:
             # Prepare callback URLs
-            callback_url = f"{settings.WEBHOOK_URL}{settings.API_V1_STR}/at/events"
+            callback_url = f"{settings.BASE_URL}{settings.API_V1_STR}/at/events"
             
             # Build response XML if say_text is provided
             xml = None
