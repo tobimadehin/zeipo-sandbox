@@ -57,6 +57,8 @@ temp/
 
 # sqlite
 *.db
+*.sqlite
+*.sqlite3
 
 # redis
 *.rdb

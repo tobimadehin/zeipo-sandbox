@@ -200,43 +200,20 @@ function Start-CloudflareTunnel {
             Stop-Process -Name cloudflared -Force
             Start-Sleep -Seconds 2
         }
+
+        # TODO: Fix logs issue flag provided but not defined: -logfile
+        # $LogPath = Join-Path $projectRoot "logs\cloudflare\cloudflared.log"
+
+        # Optional: Ensure the logs\cloudflare folder exists
+        # New-Item -ItemType Directory -Force -Path (Split-Path $LogPath) | Out-Null
         
         # Start Cloudflare tunnel in a new PowerShell window
         Write-ZeipoMessage "Starting Cloudflare Tunnel..." -Color Cyan
-        Start-Process powershell -ArgumentList "-Command", "cloudflared tunnel --url http://localhost:$Port --logfile cloudflared.log" -WindowStyle Minimized
-        
-        # Wait for tunnel to initialize
-        Write-ZeipoMessage "Waiting for Cloudflare Tunnel to initialize..." -Color Yellow
-        Start-Sleep -Seconds 15
-        
-        # Get the tunnel URL from logs
-        $logPath = Join-Path $projectRoot "cloudflared.log"
-        $maxAttempts = 10
-        $attempt = 0
-        $tunnelUrl = $null
-        
-        while ($attempt -lt $maxAttempts) {
-            if (Test-Path $logPath) {
-                $logContent = Get-Content $logPath -Tail 20 | Out-String
-                if ($logContent -match "https://.*\.trycloudflare\.com") {
-                    $tunnelUrl = $Matches[0]
-                    break
-                }
-            }
-            
-            $attempt++
-            Start-Sleep -Seconds 1
-        }
-        
-        if ($null -eq $tunnelUrl) {
-            Write-ZeipoMessage "Failed to get Cloudflare Tunnel URL from logs." -Color Red
-            return $null
-        }
-        
-        Write-ZeipoMessage "Cloudflare Tunnel URL: $tunnelUrl" -Color Green
-        return $tunnelUrl
-    }
-    catch {
+        # Start-Process powershell -ArgumentList "-Command", "cloudflared tunnel --url http://localhost:$Port --logfile cloudflared.log" -WindowStyle Minimized
+        Start-Process powershell `
+            -ArgumentList '-NoExit','-Command', "cloudflared tunnel run" `
+            -WindowStyle Minimized
+    } catch {
         Write-ZeipoMessage "Error starting Cloudflare Tunnel: $_" -Color Red
         return $null
     }
@@ -761,14 +738,9 @@ switch ($Command) {
             }
             
             # Start Cloudflare tunnel
-            $tunnelUrl = Start-CloudflareTunnel -Port $serverPort
-            if ($null -eq $tunnelUrl) {
-                Write-ZeipoMessage "Failed to start Cloudflare Tunnel. Cannot continue." -Color Red
-                exit 1
-            }
-            
-            $webhookUrl = $tunnelUrl
-            $wsUrl = $tunnelUrl.Replace("https:", "wss:")
+            Start-CloudflareTunnel
+            $webhookUrl = "https://sandbox.zeipo.org" 
+            $wsUrl = $webhookUrl.Replace("https:", "wss:")
             
             # Update the .env file with the tunnel URL
             $envPath = Join-Path $projectRoot ".env"
@@ -823,7 +795,7 @@ switch ($Command) {
             $cmd += " -e WS_URL=$wsUrl"
         }
         
-        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 core fastapi dev main.py --host 0.0.0.0"
+        Invoke-WslCommand "cd '$wslProjectRoot' && docker compose -f '$wslComposeFile' exec -e PYTHONUNBUFFERED=1 -e PYTHONPATH=/app core fastapi dev main.py --host 0.0.0.0"
     }
     
     "setup" {

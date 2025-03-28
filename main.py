@@ -55,7 +55,6 @@ async def root():
     return {
         "name": "Zeipo.ai API",
         "status": "running",
-        "models": ["tiny", "base", "small", "medium", "large"],
         "device": current_device,
         "cuda_available": cuda_available,
         "cuda_devices": [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())] if cuda_available else []
