@@ -65,11 +65,10 @@ User/PSTN ------> SignalWire ------>  Zeipo Core
 
 | Parameter | Purpose |
 |------|---------|
-| `SIGNALWIRE_HOST` | SignalWire server hostname |
-| `SIGNALWIRE_PORT` | API port (default 8082) |
-| `SIGNALWIRE_EVENT_PORT` | Event socket port (default 8084) |
-| `SIGNALWIRE_USERNAME` | Authentication username |
-| `SIGNALWIRE_PASSWORD` | Authentication password |
+| `FREESWITCH_HOST` | SignalWire server hostname |
+| `FREESWITCH_PORT` | API port (default 8021) |
+| `FREESWITCH_EVENT_PORT` | Event socket port (default 8084) |
+| `FREESWITCH_PASSWORD` | Authentication password |
 | `SIGNALWIRE_API_KEY` | API key for REST calls |
 
 ## Prerequisites
@@ -79,7 +78,8 @@ User/PSTN ------> SignalWire ------>  Zeipo Core
 - SIP trunk account with Africa's Talking
 - Open ports:
   - 5060 (SIP)
-  - 8082 (HTTP/WebSocket API)
+  - 8081 (HTTP/WebSocket API)
+  - 8021 (FreeSWITCH host)
   - 8084 (Event Socket)
   - 16384-16484 (RTP media)
 
@@ -119,7 +119,7 @@ Monitor active calls:
 docker logs zeipo-signalwire
 
 # Test API connection
-curl -v "http://localhost:8082/api/v1/calls" -u "zeipo:your_password"
+curl -v "http://localhost:8081/api/v1/calls" -u "zeipo:your_password"
 ```
 
 ## Development
@@ -130,12 +130,12 @@ The Zeipo AI application connects to SignalWire using WebSockets:
 
 ```python
 # Event listening
-self.ws_url = f"ws://{settings.SIGNALWIRE_HOST}:{settings.SIGNALWIRE_EVENT_PORT}"
+self.ws_url = f"ws://{settings.FREESWITCH_HOST}:{settings.FREESWITCH_EVENT_PORT}"
 self.event_thread = threading.Thread(target=self._event_loop_runner, daemon=True)
 self.event_thread.start()
 
 # API requests
-self.base_url = f"http://{settings.SIGNALWIRE_HOST}:{settings.SIGNALWIRE_PORT}/api/v1"
+self.base_url = f"http://{settings.FREESWITCH_HOST}:{settings.FREESWITCH_PORT}/api/v1"
 response = requests.post(f"{self.base_url}/calls", json=request_data, auth=self.auth)
 ```
 

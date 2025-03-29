@@ -9,6 +9,19 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt update && apt-get install -y build-essential libpcre3-dev libboost-dev python3-dev wget tar
+
+# Install SWIG 3.0.12 explicitly
+RUN cd /tmp \
+    && wget https://sourceforge.net/projects/swig/files/swig/swig-3.0.12/swig-3.0.12.tar.gz \
+    && tar -xzf swig-3.0.12.tar.gz \
+    && cd swig-3.0.12 \
+    && ./configure --prefix=/usr/local \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/swig-3.0.12*
+    
+
 # Set working directory
 WORKDIR /app
 

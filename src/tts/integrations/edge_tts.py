@@ -9,8 +9,8 @@ from config import settings
 import concurrent.futures
 from src.utils.helpers import gen_uuid_16
 from static.constants import logger
-from ..tts_base import TTSProvider
-from ..audio_cache import TTSAudioCache
+from src.tts.tts_base import TTSProvider
+from src.tts.audio_cache import TTSAudioCache
 
 class EdgeTTSProvider(TTSProvider):
     """Microsoft Edge TTS provider implementation."""

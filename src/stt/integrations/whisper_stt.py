@@ -1,14 +1,15 @@
 # src/stt/providers/whisper_stt.py
+import threading
 import time
 import os
+import numpy as np
 import whisper
 import torch
-from typing import Dict, Optional, Any, List
+from typing import Callable, Dict, Optional, Any, List
 
 from static.constants import AVAILABLE_MODELS, logger
-from ..stt_base import STTProvider
+from src.stt.stt_base import STTProvider
 from src.languages import WHISPER_LANGUAGES
-from src.streaming.audio_streaming import AudioStreamManager
 
 class WhisperSTTProvider(STTProvider):
     """Whisper STT provider implementation."""
@@ -152,9 +153,11 @@ class WhisperSTTProvider(STTProvider):
         Returns:
             A streaming transcription instance
         """       
+        from src.streaming.audio_streaming import AudioStreamManager
         
         # Load the model if not already loaded
         self.get_model(model_name)
         
         # Create and return a streaming transcriber
         return AudioStreamManager()
+    

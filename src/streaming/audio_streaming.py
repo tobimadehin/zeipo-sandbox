@@ -1,6 +1,8 @@
 # src/streaming/audio_streaming.py
 import os
 import asyncio
+import threading
+import time
 from fastapi.websockets import WebSocketState
 import numpy as np
 from typing import Callable, Dict, Optional, Any
@@ -9,6 +11,7 @@ import wave
 from fastapi import WebSocket
 import webrtcvad
 
+from src.stt import get_stt_provider
 from src.utils.helpers import gen_uuid_16
 from static.constants import RECORDING_DIR, logger
 from src.stt.stt_base import STTProvider
@@ -57,8 +60,11 @@ class AudioStreamManager:
         wf.setsampwidth(2)  # 2 bytes (16 bits)
         wf.setframerate(16000)  # 16 kHz
         
+        # Get STT provider
+        provider = get_stt_provider()
+        
         # Initialize streaming transcriber
-        transcriber = STTProvider(
+        transcriber = provider.create_streaming_transcriber(
             model_name=model_name,
             language=language,
             chunk_size_ms=1000,
@@ -258,3 +264,66 @@ class AudioStreamManager:
             except Exception as e:
                 logger.error(f"Error in stale connection cleanup: {str(e)}")
                 await asyncio.sleep(60)
+                
+    def start(self, callback: Callable[[Dict[str, Any]], None]) -> None:
+        """Start streaming transcription with callback for results."""
+        self.streaming_callback = callback
+        self.is_streaming = True
+        self.audio_buffer = []
+        self.last_process_time = time.time()
+        
+        # Start background processing thread
+        self.process_thread = threading.Thread(target=self._process_audio_loop, daemon=True)
+        self.process_thread.start()
+        
+        logger.info("Started streaming transcription")
+
+    def add_audio_chunk(self, audio_chunk: np.ndarray) -> None:
+        """Add audio chunk to streaming buffer."""
+        if not self.is_streaming:
+            return
+        
+        self.audio_buffer.append(audio_chunk)
+        
+    def stop(self) -> Dict[str, Any]:
+        """Stop streaming transcription and return final results."""
+        self.is_streaming = False
+        
+        # Wait for processing thread to finish
+        if hasattr(self, 'process_thread') and self.process_thread.is_alive():
+            self.process_thread.join(timeout=5.0)
+        
+        # Process remaining audio
+        if self.audio_buffer:
+            combined_audio = np.concatenate(self.audio_buffer)
+            model = self.get_model(self.model_name)
+            final_result = model.transcribe(combined_audio)
+            return final_result
+        
+        return {"text": "", "segments": []}
+
+    def _process_audio_loop(self):
+        """Background thread to process audio chunks periodically."""
+        while self.is_streaming:
+            # Process audio when enough has accumulated
+            current_time = time.time()
+            if (current_time - self.last_process_time >= 2.0) and self.audio_buffer:
+                try:
+                    combined_audio = np.concatenate(self.audio_buffer)
+                    model = self.get_model(self.model_name)
+                    result = model.transcribe(combined_audio)
+                    
+                    if self.streaming_callback:
+                        self.streaming_callback({
+                            "text": result["text"],
+                            "is_final": False
+                        })
+                    
+                    self.audio_buffer = []
+                    self.last_process_time = current_time
+                    
+                except Exception as e:
+                    logger.error(f"Error processing audio: {str(e)}")
+            
+            time.sleep(0.1)
+        

@@ -8,8 +8,8 @@ from src.utils.at_utils import log_call_to_file
 from static.constants import logger
 from src.utils.helpers import gen_uuid_12
 
-from ..provider_base import TelephonyProvider
-from ..provider_factory import register_provider
+from src.telephony.provider_base import TelephonyProvider
+from src.telephony.provider_factory import register_provider
 
 class VoipSimulatorProvider(TelephonyProvider):
     """

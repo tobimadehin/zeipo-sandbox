@@ -22,8 +22,8 @@ import asyncio
 from src.nlp.intent_processor import IntentProcessor
 from db.models import CallSession
 
-from ..provider_base import TelephonyProvider
-from ..provider_factory import register_provider
+from src.telephony.provider_base import TelephonyProvider
+from src.telephony.provider_factory import register_provider
 
 class SignalWireProvider(TelephonyProvider):
     """SignalWire telephony provider implementation."""
@@ -528,6 +528,31 @@ class SignalWireProvider(TelephonyProvider):
             "provider": "signalwire",
             "raw_data": request_data
         }
+        
+    def handle_webrtc_offer(self, session_id, sdp):
+        """
+        Handle WebRTC offer from browser and connect to FreeSWITCH.
+        
+        Args:
+            session_id: Unique session ID
+            sdp: SDP offer from browser
+            
+        Returns:
+            SDP answer from FreeSWITCH
+        """
+        # Get the FreeSWITCH client
+        client = self.get_client()
+        
+        # Create WebRTC session in FreeSWITCH
+        # This would call a method to send the SDP to FreeSWITCH via ESL
+        # and get an answer back
+        result = client.create_webrtc_session(session_id, sdp)
+        
+        if result and "sdp" in result:
+            return result["sdp"]
+        else:
+            logger.error(f"Failed to create WebRTC session for {session_id}")
+            return None
 
     def get_client(self):
         """Get the SignalWire client instance."""

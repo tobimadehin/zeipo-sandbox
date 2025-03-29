@@ -37,7 +37,6 @@ def startup_event():
     # Initialize SignalWire if it's the configured provider
     if settings.TELEPHONY_PROVIDER == "signalwire":
         try:
-            from src.telephony import get_telephony_provider
             signalwire_client = get_telephony_provider()
             logger.info("SignalWire client initialized successfully")
         except Exception as e:

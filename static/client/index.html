@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,7 +12,7 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
-        
+
         .container {
             max-width: 600px;
             margin: 0 auto;
@@ -20,12 +21,12 @@
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
-        
+
         h1 {
             color: #4a4a4a;
             text-align: center;
         }
-        
+
         .status {
             padding: 10px;
             margin: 10px 0;
@@ -33,29 +34,29 @@
             text-align: center;
             font-weight: bold;
         }
-        
+
         .status.connected {
             background-color: #d4edda;
             color: #155724;
         }
-        
+
         .status.disconnected {
             background-color: #f8d7da;
             color: #721c24;
         }
-        
+
         .status.connecting {
             background-color: #fff3cd;
             color: #856404;
         }
-        
+
         .controls {
             display: flex;
             flex-direction: column;
             gap: 10px;
             margin: 20px 0;
         }
-        
+
         button {
             padding: 10px;
             border: none;
@@ -65,16 +66,16 @@
             cursor: pointer;
             font-size: 16px;
         }
-        
+
         button:hover {
             background-color: #45a049;
         }
-        
+
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
-        
+
         .log-container {
             margin-top: 20px;
             border: 1px solid #ddd;
@@ -84,7 +85,7 @@
             overflow-y: auto;
             background-color: #f9f9f9;
         }
-        
+
         .transcript-container {
             margin-top: 20px;
             padding: 10px;
@@ -93,12 +94,12 @@
             min-height: 100px;
             background-color: #fff;
         }
-        
+
         .transcript {
             font-style: italic;
             color: #666;
         }
-        
+
         .response {
             font-weight: bold;
             color: #4a4a4a;
@@ -106,47 +107,34 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Zeipo WebRTC Client</h1>
-        
+
         <div id="connectionStatus" class="status disconnected">
             Disconnected
         </div>
-        
+
         <div class="controls">
             <button id="connectButton">Connect</button>
             <button id="disconnectButton" disabled>Disconnect</button>
         </div>
-        
+
         <div class="transcript-container">
             <h3>Conversation</h3>
             <div id="transcript" class="transcript">Waiting for your voice input...</div>
             <div id="response" class="response"></div>
         </div>
-        
+
         <div class="log-container">
             <div id="log"></div>
         </div>
-        
+
         <audio id="remoteAudio" autoplay></audio>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@signalwire/js"></script>
+
     <script>
-        // SignalWire/Verto client configuration
-        const config = {
-            host: window.location.hostname,
-            port: 5080,
-            socketUrl: `wss://${window.location.hostname}:5081`,
-            login: '1000',  // Extension number
-            passwd: 'your_secure_password',
-            callerId: 'Zeipo WebRTC User',
-            ICEServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
-        };
-        
         // DOM Elements
         const connectButton = document.getElementById('connectButton');
         const disconnectButton = document.getElementById('disconnectButton');
@@ -155,17 +143,26 @@
         const transcriptElement = document.getElementById('transcript');
         const responseElement = document.getElementById('response');
         const remoteAudio = document.getElementById('remoteAudio');
-        
+
         // State management
-        let vertoClient = null;
-        let currentCall = null;
+        let peerConnection = null;
         let localStream = null;
+        let dataChannel = null;
+        let websocket = null;
         let sessionId = null;
-        
+
+        // ICE servers configuration (STUN/TURN)
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
         // Event Listeners
         connectButton.addEventListener('click', connect);
         disconnectButton.addEventListener('click', disconnect);
-        
+
         // Functions
         function log(message) {
             const entry = document.createElement('div');
@@ -173,166 +170,254 @@
             logElement.appendChild(entry);
             logElement.scrollTop = logElement.scrollHeight;
         }
-        
+
         function updateStatus(status, message) {
             connectionStatus.className = `status ${status}`;
             connectionStatus.textContent = message;
         }
-        
+
         async function connect() {
             try {
                 updateStatus('connecting', 'Connecting...');
-                
+
                 // Generate session ID
                 sessionId = 'web_' + Math.random().toString(36).substring(2, 15);
-                
+                log(`Generated session ID: ${sessionId}`);
+
                 // Get user media for microphone
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Initialize Verto client
-                vertoClient = new window.vertoClient(config);
-                
-                // Setup event handlers
-                vertoClient.on('login.success', () => {
-                    log('Verto client logged in successfully');
-                    makeCall();
-                });
-                
-                vertoClient.on('login.failed', (err) => {
-                    log(`Login failed: ${err.message}`);
-                    updateStatus('disconnected', 'Login failed');
-                });
-                
-                vertoClient.on('socket.close', () => {
-                    log('Socket connection closed');
-                    updateStatus('disconnected', 'Disconnected');
-                    resetCallState();
-                });
-                
-                // Login to SignalWire
-                await vertoClient.login();
-                
+                log('Got local audio stream');
+
+                // Connect to websocket for signaling
+                await connectWebSocket();
+
+                // Success! Update UI
+                connectButton.disabled = true;
+                disconnectButton.disabled = false;
+
             } catch (error) {
                 log(`Connection error: ${error.message}`);
                 updateStatus('disconnected', 'Connection failed');
+                resetState();
             }
         }
-        
-        async function makeCall() {
-            try {
-                // Call parameters
-                const callOptions = {
-                    destinationNumber: '9000',  // Extension for Zeipo AI
-                    caller_id_name: 'Zeipo WebRTC User',
-                    caller_id_number: sessionId,
-                    useVideo: false,
-                    useAudio: true,
-                    useStereo: false
+
+        async function connectWebSocket() {
+            return new Promise((resolve, reject) => {
+                // Use the current hostname and replace http with ws
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/api/v1/telephony/webrtc/ws/${sessionId}`;
+
+                log(`Connecting to WebSocket: ${wsUrl}`);
+                websocket = new WebSocket(wsUrl);
+
+                websocket.onopen = () => {
+                    log('WebSocket connected');
+                    setupPeerConnection();
+                    resolve();
                 };
-                
-                // Create the call
-                currentCall = vertoClient.newCall(callOptions);
-                
-                // Call event handlers
-                currentCall.on('ringing', () => {
-                    log('Call is ringing');
-                });
-                
-                currentCall.on('answered', () => {
-                    log('Call was answered');
+
+                websocket.onmessage = handleWebSocketMessage;
+
+                websocket.onerror = (error) => {
+                    log(`WebSocket error: ${error}`);
+                    reject(new Error('WebSocket connection failed'));
+                };
+
+                websocket.onclose = () => {
+                    log('WebSocket closed');
+                    resetState();
+                };
+            });
+        }
+
+        function setupPeerConnection() {
+            // Create RTCPeerConnection
+            peerConnection = new RTCPeerConnection(iceServers);
+            log('Created peer connection');
+
+            // Add local stream
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+                log(`Added ${track.kind} track to peer connection`);
+            });
+
+            // Set up data channel
+            dataChannel = peerConnection.createDataChannel('zeipo-data');
+            dataChannel.onopen = () => log('Data channel open');
+            dataChannel.onmessage = (event) => log(`Data channel message: ${event.data}`);
+
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log('Generated ICE candidate');
+                    sendToServer({
+                        type: 'ice_candidate',
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            // Handle ICE connection state changes
+            peerConnection.oniceconnectionstatechange = () => {
+                log(`ICE connection state: ${peerConnection.iceConnectionState}`);
+                if (peerConnection.iceConnectionState === 'connected' ||
+                    peerConnection.iceConnectionState === 'completed') {
                     updateStatus('connected', 'Connected');
-                    connectButton.disabled = true;
-                    disconnectButton.disabled = false;
-                    
-                    // Add local stream to the call
-                    if (localStream) {
-                        localStream.getTracks().forEach(track => {
-                            currentCall.addTrack(track, localStream);
-                        });
-                    }
+                }
+            };
+
+            // Handle incoming tracks
+            peerConnection.ontrack = (event) => {
+                log(`Received ${event.track.kind} track`);
+                if (event.track.kind === 'audio') {
+                    // Connect remote audio
+                    const remoteStream = new MediaStream([event.track]);
+                    remoteAudio.srcObject = remoteStream;
+                }
+            };
+
+            // Create offer
+            createAndSendOffer();
+        }
+
+        async function createAndSendOffer() {
+            try {
+                log('Creating offer...');
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: false
                 });
-                
-                currentCall.on('ended', () => {
-                    log('Call ended');
-                    updateStatus('disconnected', 'Call ended');
-                    resetCallState();
+
+                log('Setting local description');
+                await peerConnection.setLocalDescription(offer);
+
+                log('Sending offer to server');
+                sendToServer({
+                    type: 'webrtc_offer',
+                    sdp: peerConnection.localDescription.sdp
                 });
-                
-                currentCall.on('error', (error) => {
-                    log(`Call error: ${error.message}`);
-                    updateStatus('disconnected', 'Call error');
-                    resetCallState();
-                });
-                
-                // Handle incoming audio/video tracks
-                currentCall.on('track', (event) => {
-                    log(`Received ${event.track.kind} track`);
-                    if (event.track.kind === 'audio') {
-                        const stream = new MediaStream([event.track]);
-                        remoteAudio.srcObject = stream;
-                    }
-                });
-                
-                // Handle transcript updates from SignalWire speech detection
-                currentCall.on('info', (params) => {
-                    if (params.speechResult) {
-                        transcriptElement.textContent = params.speechResult;
-                    }
-                    if (params.aiResponse) {
-                        responseElement.textContent = params.aiResponse;
-                    }
-                });
-                
-                // Make the call
-                await currentCall.answer();
-                log('Call initiated');
-                
+
             } catch (error) {
-                log(`Error making call: ${error.message}`);
-                updateStatus('disconnected', 'Call failed');
+                log(`Error creating offer: ${error.message}`);
             }
         }
-        
-        function resetCallState() {
-            // Clean up call resources
-            if (currentCall) {
-                try {
-                    currentCall.hangup();
-                } catch (e) {}
-                currentCall = null;
+
+        function handleWebSocketMessage(event) {
+            try {
+                const message = JSON.parse(event.data);
+                log(`Received message type: ${message.type}`);
+
+                switch (message.type) {
+                    case 'connection_confirmed':
+                        log(`Connection confirmed: ${message.connection_id}`);
+                        break;
+
+                    case 'webrtc_answer':
+                        log('Received answer from server');
+                        if (peerConnection && message.sdp) {
+                            const answer = new RTCSessionDescription({
+                                type: 'answer',
+                                sdp: message.sdp
+                            });
+                            peerConnection.setRemoteDescription(answer)
+                                .then(() => log('Set remote description successfully'))
+                                .catch(error => log(`Error setting remote description: ${error.message}`));
+                        }
+                        break;
+
+                    case 'ice_candidate':
+                        log('Received ICE candidate from server');
+                        if (peerConnection && message.candidate) {
+                            peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate))
+                                .then(() => log('Added ICE candidate successfully'))
+                                .catch(error => log(`Error adding ICE candidate: ${error.message}`));
+                        }
+                        break;
+
+
+                    case 'ice_candidate_ack':
+                        log('Server acknowledged ICE candidate');
+                        break;
+
+                    case 'transcription':
+                        // Update transcript UI
+                        transcriptElement.textContent = message.text || 'No transcription';
+                        log(`Transcription: ${message.text}`);
+                        break;
+
+                    case 'response':
+                        // Update response UI
+                        responseElement.textContent = message.text || '';
+                        log(`Response: ${message.text}`);
+                        break;
+
+                    default:
+                        log(`Unknown message type: ${message.type}`);
+                }
+
+            } catch (error) {
+                log(`Error handling message: ${error.message}`);
             }
-            
-            // Clean up local media
+        }
+
+        function sendToServer(message) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                // Add session ID to every message
+                message.session_id = sessionId;
+                websocket.send(JSON.stringify(message));
+            } else {
+                log('WebSocket not connected, cannot send message');
+            }
+        }
+
+        function resetState() {
+            // Clean up WebRTC
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            // Clean up data channel
+            if (dataChannel) {
+                dataChannel.close();
+                dataChannel = null;
+            }
+
+            // Clean up WebSocket
+            if (websocket) {
+                websocket.close();
+                websocket = null;
+            }
+
+            // Clean up local stream
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
-            
+
             // Reset UI
             connectButton.disabled = false;
             disconnectButton.disabled = true;
-        }
-        
-        function disconnect() {
-            log('Disconnecting...');
-            
-            // Hang up call
-            if (currentCall) {
-                currentCall.hangup();
-            }
-            
-            // Logout from Verto
-            if (vertoClient) {
-                vertoClient.logout();
-            }
-            
-            resetCallState();
             updateStatus('disconnected', 'Disconnected');
         }
-        
+
+        function disconnect() {
+            log('Disconnecting...');
+
+            // Send end call message
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                sendToServer({ type: 'end_call' });
+                log('Sent end_call message');
+            }
+
+            resetState();
+        }
+
         // Initialize
         log('WebRTC client initialized');
         updateStatus('disconnected', 'Ready to connect');
     </script>
 </body>
+
 </html>

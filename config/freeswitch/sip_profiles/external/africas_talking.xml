@@ -1,0 +1,12 @@
+<include>
+  <gateway name="africas_talking">
+    <!-- TODO: Add your SIP username and password -->
+    <param name="username" value="YOUR_AT_SIP_USERNAME"/> 
+    <param name="password" value="YOUR_AT_SIP_PASSWORD"/>
+    <param name="proxy" value="ke.sip.africastalking.com"/>
+    <param name="register" value="true"/>
+    <param name="caller-id-in-from" value="true"/>
+    <param name="extension" value="default"/>
+    <param name="context" value="public"/>
+  </gateway>
+</include>

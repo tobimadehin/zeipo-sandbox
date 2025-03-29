@@ -10,8 +10,8 @@ from src.utils.helpers import gen_uuid_12
 from src.tts import get_tts_provider
 from src.utils.at_utils import log_call_to_file
 
-from ..provider_base import TelephonyProvider
-from ..provider_factory import register_provider
+from src.telephony.provider_base import TelephonyProvider
+from src.telephony.provider_factory import register_provider
 
 class AfricasTalkingProvider(TelephonyProvider):
     """Africa's Talking telephony provider implementation."""

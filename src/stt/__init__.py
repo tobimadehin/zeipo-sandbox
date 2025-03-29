@@ -2,8 +2,8 @@
 from typing import Optional
 from config import settings
 from static.constants import logger
-from .stt_base import STTProvider
-from .integrations.whisper_stt import WhisperSTTProvider
+from src.stt.stt_base import STTProvider
+from src.stt.integrations.whisper_stt import WhisperSTTProvider
 
 # Global STT provider instance
 _stt_provider: Optional[STTProvider] = None

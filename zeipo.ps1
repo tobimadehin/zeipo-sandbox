@@ -106,7 +106,7 @@ function Test-DockerWsl {
                 if ($LASTEXITCODE -ne 0) {
                     # Try one more time with direct command
                     Write-ZeipoMessage "First attempt failed. Trying alternative method..." -Color Yellow
-                    wsl -- sudo dockerd > /dev/null 2>&1 &
+                    wsl bash -c "sudo dockerd > /dev/null 2>&1 &"
                     Start-Sleep -Seconds 5
                     $docker = wsl -- docker ps 2>&1
                     

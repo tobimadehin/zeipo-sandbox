@@ -60,3 +60,4 @@ class STTProvider(ABC):
             A streaming transcription instance
         """
         pass
+    

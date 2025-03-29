@@ -2,9 +2,9 @@
 from typing import Optional
 from config import settings
 from static.constants import logger
-from .tts_base import TTSProvider
-from .integrations.google_tts import GoogleTTSProvider
-from .integrations.edge_tts import EdgeTTSProvider
+from src.tts.tts_base import TTSProvider
+from src.tts.integrations.google_tts import GoogleTTSProvider
+from src.tts.integrations.edge_tts import EdgeTTSProvider
 
 # Global TTS provider instance
 _tts_provider: Optional[TTSProvider] = None

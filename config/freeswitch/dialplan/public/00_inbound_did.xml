@@ -1,0 +1,13 @@
+<include>
+  <extension name="public_did">
+    <condition field="destination_number" expression="^(\+?(\d+))$">
+      <action application="set" data="domain_name=$${domain}"/>
+      <action application="set" data="caller_id_name=${caller_id_name}"/>
+      <action application="set" data="caller_id_number=${caller_id_number}"/>
+      <action application="set" data="session_id=${uuid}"/>
+      <action application="socket" data="127.0.0.1:8084 async full"/>
+      <action application="answer"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+</include>

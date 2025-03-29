@@ -8,6 +8,9 @@ services:
       - ..:/app
     ports:
       - "8000:8000"
+      - "8084:8084"
+      - "5066:5066"
+      - "7443:7443"
     runtime: nvidia
     env_file:
       - ../.env
@@ -31,11 +34,13 @@ services:
     image: safarov/freeswitch
     container_name: zeipo-freeswitch
     ports:
-      - "5060:5060/udp"                                                                                                                                                                                                                                                                                                                                                    
-      - "5080:5080/udp"                                                                                                                                                                                                                                                                                                                                                    
-      - "64000-64100:64000-64100/udp"                                                                                                                                                                                                                                                                                                                                      
-      - "5066:5066/tcp"                                                                                                                                                                                                                                                                                                                                                    
-      - "9443:7443"
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5080:5080"
+      - "8021:8021"
+      - "8081:8081"
+      - "8082:8082"
+      - "16384-16484:16384-16484/udp"
     volumes:
       - '../config/freeswitch:/etc/freeswitch'
       - '../config/freeswitch-sounds:/usr/share/freeswitch/sounds'

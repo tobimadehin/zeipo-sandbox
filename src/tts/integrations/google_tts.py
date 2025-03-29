@@ -7,9 +7,9 @@ from config import settings
 from src.utils.helpers import gen_uuid_16
 from static.constants import logger
 
-from ..tts_base import TTSProvider
-from ..audio_cache import TTSAudioCache
-from ..voice_profiles import get_voice_for_language, VoiceGender
+from src.tts.tts_base import TTSProvider
+from src.tts.audio_cache import TTSAudioCache
+from src.tts.voice_profiles import get_voice_for_language, VoiceGender
 
 class GoogleTTSProvider(TTSProvider):
     """Google Cloud Text-to-Speech provider implementation."""

@@ -4,9 +4,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./zeipo.db"
     API_V1_STR: str = "/api/v1"
+    TZ: str = "Africa/Lagos"
     
-    TELEPHONY_PROVIDER: str = "voip_simulator"
-    DEFAULT_TELEPHONY_PROVIDER: str = "voip_simulator"
+    TELEPHONY_PROVIDER: str = "signalwire"
+    DEFAULT_TELEPHONY_PROVIDER: str = "signalwire"
     
     AT_USER: str = "sandbox"  
     AT_API_KEY: str = ""
@@ -42,11 +43,15 @@ class Settings(BaseSettings):
     
     SIGNALWIRE_API_KEY: str = ""
     SIGNALWIRE_HOST: str = ""
-    SIGNALWIRE_PORT: int = 8082
-    SIGNALWIRE_EVENT_PORT: int = 8084
     SIGNALWIRE_USERNAME: str = ""
     SIGNALWIRE_PASSWORD: str = ""
-    SIGNALWIRE_ENV: str = ""
+    SIGNALWIRE_PORT: int = 8082
+    SIGNALWIRE_EVENT_PORT: int = 8084
+    
+    FREESWITCH_HOST: str = "localhost"
+    FREESWITCH_PORT: int = 8021
+    FREESWITCH_PASSWORD: str = "ClueCon"
+    FREESWITCH_ENV: str = "development"
     
     class Config:
         env_file = ".env"

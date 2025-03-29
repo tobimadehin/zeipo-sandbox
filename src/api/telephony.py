@@ -458,75 +458,7 @@ class CallHandler:
                 status_code=500,
                 content={"status": "error", "message": str(e)}
             )
-    
-
-# Add WebRTC signaling endpoints for web client
-@router.post("/webrtc/offer")
-async def webrtc_offer(signal: WebRTCSignal):
-    """
-    Handle WebRTC SDP offer from client and create a SignalWire session.
-    """
-    if not signalwire_client:
-        return JSONResponse(
-            status_code=500, 
-            content={"status": "error", "message": "ARI client not available"}
-        )
-    
-    try:
-        # Generate session ID if not provided
-        session_id = signal.session_id or gen_uuid_12()
         
-        # Validate SDP offer
-        if not signal.sdp:
-            return JSONResponse(
-                status_code=400,
-                content={"status": "error", "message": "Missing SDP offer"}
-            )
-            
-        # In a real implementation, we would create a WebRTC session via SignalWire
-        # For this example, we'll simulate a successful response
-        logger.info(f"Processing WebRTC offer for session {session_id}")
-        
-        # Return a simulated SDP answer
-        return {
-            "status": "success",
-            "session_id": session_id,
-            "type": "answer",
-            "sdp": "v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n"
-        }
-        
-    except Exception as e:
-        logger.error(f"Error processing WebRTC offer: {str(e)}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@router.post("/webrtc/ice-candidate")
-async def webrtc_ice_candidate(signal: WebRTCSignal):
-    """
-    Handle ICE candidate from WebRTC client and relay to Asterisk.
-    """
-    if not signal.session_id or not signal.candidate:
-        return JSONResponse(
-            status_code=400,
-            content={"status": "error", "message": "Missing session_id or candidate"}
-        )
-    
-    try:
-        logger.info(f"Received ICE candidate for session {signal.session_id}")
-        
-        # In a real implementation, we would forward this to SignalWire
-        # For now, we'll just acknowledge receipt
-        
-        return {"status": "success"}
-        
-    except Exception as e:
-        logger.error(f"Error processing ICE candidate: {str(e)}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
         
 @router.websocket("/webrtc/ws/{session_id}")
 async def webrtc_websocket(
@@ -553,10 +485,14 @@ async def webrtc_websocket(
             "connection_id": connection_id,
             "session_id": session_id,
             "server_time": time.time(),
-            "provider": "asterisk"
+            "provider": "signalwire"
         })
         
-        # Set up transcript callback for speech processing
+        # Get SignalWire client
+        sw_provider = get_telephony_provider()
+        sw_client = sw_provider.get_client()
+        
+        # Set up transcript callback
         async def transcript_callback(result):
             if websocket.client_state != WebSocketState.CONNECTED:
                 return
@@ -575,6 +511,7 @@ async def webrtc_websocket(
                     # Process through NLU
                     db = SessionLocal()
                     try:
+                        # TODO: Process text through NLU
                         nlu_results, response_text = intent_processor.process_text(
                             text=text,
                             session_id=session_id,
@@ -588,14 +525,13 @@ async def webrtc_websocket(
                                 "text": response_text
                             })
                             
-                            # Also send via SignalWire TTS if available
-                            if signalwire_client:
-                                signalwire_client.speak_text(session_id, response_text)
-                                
+                            # Also send via SignalWire TTS
+                            if sw_client:
+                                sw_client.speak_text(session_id, response_text)
                     finally:
                         db.close()
         
-        # Connect to audio stream manager with callback
+        # Connect to audio stream manager
         await stream_manager.connect(
             websocket=websocket,
             session_id=session_id,
@@ -611,22 +547,55 @@ async def webrtc_websocket(
             
             if msg_type == "webrtc_offer":
                 # Forward SDP offer to SignalWire
-                logger.debug(f"Received WebRTC offer for session {session_id}")
+                logger.info(f"Received WebRTC offer for session {session_id}")
                 
-                if signalwire_client:
-                    # In real implementation, would create SignalWire WebRTC session
-                    # Here we'll just respond with a placeholder
-                    await websocket.send_json({
-                        "type": "webrtc_answer",
-                        "sdp": "v=0\r\no=- 1234567890 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:someufrag\r\na=ice-pwd:someicepwd\r\na=fingerprint:sha-256 00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF\r\na=setup:actpass\r\na=mid:0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n"
-                    })
+                if sw_client:
+                    sdp = message.get("sdp")
+                    if sdp:
+                        # Create WebRTC session via SignalWire
+                        result = sw_client.create_webrtc_session(session_id, sdp)
+                        
+                        if result and "sdp" in result:
+                            await websocket.send_json({
+                                "type": "webrtc_answer",
+                                "sdp": result["sdp"]
+                            })
+                        else:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": "Failed to create WebRTC session"
+                            })
                 
             elif msg_type == "ice_candidate":
-                # Forward ICE candidate
+                # Forward ICE candidate to FreeSWITCH
                 logger.info(f"Received ICE candidate for session {session_id}")
                 
-                # In real implementation would send to SignalWire
-                pass
+                # Save the candidate to pass to FreeSWITCH
+                candidate = message.get("candidate")
+                if sw_client and candidate:
+                    # In a real implementation, this would forward to FreeSWITCH
+                    # sw_client.add_ice_candidate(session_id, candidate)
+                    pass
+                
+                # Acknowledge receipt of candidate
+                await websocket.send_json({
+                    "type": "ice_candidate_ack",
+                    "success": True
+                })
+                
+                # In a real implementation, FreeSWITCH would also generate
+                # its own ICE candidates that we should forward to the client:
+                # Simulating a response ICE candidate from FreeSWITCH
+                freeswitch_candidate = {
+                    "candidate": "candidate:1 1 UDP 2122260223 192.168.1.1 46692 typ host",
+                    "sdpMid": "0",
+                    "sdpMLineIndex": 0
+                }
+                
+                await websocket.send_json({
+                    "type": "ice_candidate",
+                    "candidate": freeswitch_candidate
+                })
             
             elif msg_type == "audio_data":
                 # Process audio data
@@ -638,8 +607,8 @@ async def webrtc_websocket(
                 # End the call
                 logger.info(f"Received end call request for session {session_id}")
                 
-                if signalwire_client:
-                    signalwire_client.hangup_call(session_id)
+                if sw_client:
+                    sw_client.hangup_call(session_id)
                 
                 # Close the WebSocket
                 await websocket.close()
@@ -652,6 +621,11 @@ async def webrtc_websocket(
         logger.error(f"Error in WebRTC WebSocket: {str(e)}", exc_info=True)
     
     finally:
-        # Clean up connection
-        if connection_id and connection_id in stream_manager.active_connections:
-            await stream_manager.disconnect(connection_id)
+        # Clean up
+        if connection_id:
+            try:
+                await stream_manager.disconnect(connection_id)
+                logger.info(f"Disconnected WebRTC WebSocket: {connection_id}")
+            except Exception as e:
+                logger.error(f"Error disconnecting WebRTC WebSocket: {str(e)}")
+                

@@ -9,7 +9,7 @@ from fastapi.websockets import WebSocketState
 import numpy as np
 
 from db.session import SessionLocal
-from src.api.telephony import WebRTCSignal, webrtc_ice_candidate, webrtc_offer
+from src.api.telephony import WebRTCSignal
 from static.constants import logger
 from src.streaming.audio_streaming import AudioStreamManager
 from src.nlp.intent_processor import IntentProcessor
