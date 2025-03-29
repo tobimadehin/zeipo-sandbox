@@ -2,15 +2,59 @@
 import logging
 from typing import Dict, List
 
+from colorama import Fore, Style, init
 from src.nlp.intent_patterns import IntentType
 from src.nlp.entity_extractor import EntityType
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Initialize colorama
+init(autoreset=True)
 
+# Custom formatter with colors
+class ColoredFormatter(logging.Formatter):
+    COLORS = {
+        'DEBUG': Fore.BLUE,
+        'INFO': Fore.GREEN,
+        'WARNING': Fore.YELLOW,
+        'ERROR': Fore.RED,
+        'CRITICAL': Fore.RED + Style.BRIGHT
+    }
+
+    def format(self, record):
+        # Save original format
+        format_orig = self._style._fmt
+        
+        # Add colors based on log level
+        if record.levelname in self.COLORS:
+            self._style._fmt = f"{self.COLORS[record.levelname]}%(asctime)s - %(name)s - %(levelname)s - %(message)s{Style.RESET_ALL}"
+        
+        # Format with colors
+        result = super().format(record)
+        
+        # Restore original format
+        self._style._fmt = format_orig
+        
+        return result
+
+# Configure logging with colored formatter
+def configure_colored_logging():
+    root_logger = logging.getLogger()
+    
+    # Clear existing handlers to avoid duplication
+    if root_logger.handlers:
+        for handler in root_logger.handlers:
+            root_logger.removeHandler(handler)
+    
+    # Add console handler with colored formatter
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(ColoredFormatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    ))
+    
+    root_logger.addHandler(console_handler)
+    root_logger.setLevel(logging.DEBUG)
+
+# Usage in constants.py
+configure_colored_logging()
 logger = logging.getLogger("zeipo-api")
 
 AVAILABLE_MODELS = ["tiny", "base", "small", "medium", "large"]
