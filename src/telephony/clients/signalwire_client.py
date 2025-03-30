@@ -92,6 +92,8 @@ class SignalWireClient:
             self.event_callbacks[event_type] = []
         
         self.event_callbacks[event_type].append(callback)
+        
+        logger.debug(f"Registered callback for event type: {event_type}")
         return True
     
     def make_call(self, destination: str, caller_id: str = None, variables: Dict[str, str] = None) -> Dict[str, Any]:

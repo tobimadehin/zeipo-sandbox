@@ -47,7 +47,7 @@ async def process_audio(file_path: str, model_name: str, task: str, language: Op
 @router.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
-    model: str = Form("small"),
+    model: str = Form("tiny"),
     task: str = Form("transcribe"),
     language: Optional[str] = Form(None),
     db: Session = Depends(get_db)

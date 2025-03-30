@@ -54,7 +54,7 @@ class WhisperSTTProvider(STTProvider):
         
         return self.models[name]
     
-    def transcribe(self, audio_file: str, language: Optional[str] = None, task: str = "transcribe", model_name: str = "small", **kwargs) -> Dict[str, Any]:
+    def transcribe(self, audio_file: str, language: Optional[str] = None, task: str = "transcribe", model_name: str = "tiny", **kwargs) -> Dict[str, Any]:
         """
         Transcribe speech from an audio file using Whisper.
         
@@ -134,30 +134,14 @@ class WhisperSTTProvider(STTProvider):
     
     def create_streaming_transcriber(
         self, 
-        model_name: str = "small",
-        language: Optional[str] = None,
-        chunk_size_ms: int = 1000,
-        buffer_size_ms: int = 5000,
-        **kwargs
-    ) -> Any:
+        model_name: str = "tiny",
+    ):
         """
         Create a streaming transcription instance.
         
         Args:
-            model_name: Name of the model to use
-            language: Language code if known
-            chunk_size_ms: Size of audio chunks to process
-            buffer_size_ms: Size of the buffer window
-            **kwargs: Additional parameters
-            
-        Returns:
-            A streaming transcription instance
+            model_name: Name of the model to use  
         """       
-        from src.streaming.audio_streaming import AudioStreamManager
-        
         # Load the model if not already loaded
         self.get_model(model_name)
-        
-        # Create and return a streaming transcriber
-        return AudioStreamManager()
     

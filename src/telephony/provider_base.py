@@ -102,3 +102,8 @@ class TelephonyProvider(ABC):
         """
         pass
     
+    @abstractmethod
+    def stop(self) -> None:
+        """Stop the provider and clean up any resources."""
+        pass
+    

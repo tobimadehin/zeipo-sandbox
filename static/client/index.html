@@ -180,21 +180,12 @@
             try {
                 updateStatus('connecting', 'Connecting...');
 
-                // Generate session ID
-                sessionId = 'web_' + Math.random().toString(36).substring(2, 15);
-                log(`Generated session ID: ${sessionId}`);
-
                 // Get user media for microphone
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 log('Got local audio stream');
 
                 // Connect to websocket for signaling
                 await connectWebSocket();
-
-                // Success! Update UI
-                connectButton.disabled = true;
-                disconnectButton.disabled = false;
-
             } catch (error) {
                 log(`Connection error: ${error.message}`);
                 updateStatus('disconnected', 'Connection failed');
@@ -206,21 +197,20 @@
             return new Promise((resolve, reject) => {
                 // Use the current hostname and replace http with ws
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/api/v1/telephony/webrtc/ws/${sessionId}`;
+                const wsUrl = `${protocol}//${window.location.host}/api/v1/telephony/webrtc/ws`;
 
                 log(`Connecting to WebSocket: ${wsUrl}`);
                 websocket = new WebSocket(wsUrl);
 
                 websocket.onopen = () => {
                     log('WebSocket connected');
-                    setupPeerConnection();
                     resolve();
                 };
 
                 websocket.onmessage = handleWebSocketMessage;
 
                 websocket.onerror = (error) => {
-                    log(`WebSocket error: ${error}`);
+                    log(`WebSocket error: ${error.message}`);
                     reject(new Error('WebSocket connection failed'));
                 };
 
@@ -244,7 +234,11 @@
 
             // Set up data channel
             dataChannel = peerConnection.createDataChannel('zeipo-data');
-            dataChannel.onopen = () => log('Data channel open');
+            dataChannel.onopen = () => {
+                log('Data channel open');
+                // Update connection status when data channel is open
+                updateStatus('connected', 'Connected to media channel');
+            };
             dataChannel.onmessage = (event) => log(`Data channel message: ${event.data}`);
 
             // Handle ICE candidates
@@ -255,6 +249,8 @@
                         type: 'ice_candidate',
                         candidate: event.candidate
                     });
+                } else {
+                    log('ICE candidate gathering complete');
                 }
             };
 
@@ -263,7 +259,11 @@
                 log(`ICE connection state: ${peerConnection.iceConnectionState}`);
                 if (peerConnection.iceConnectionState === 'connected' ||
                     peerConnection.iceConnectionState === 'completed') {
-                    updateStatus('connected', 'Connected');
+                    updateStatus('connected', 'WebRTC Connected');
+                } else if (peerConnection.iceConnectionState === 'failed' ||
+                    peerConnection.iceConnectionState === 'disconnected') {
+                    log('ICE connection failed or disconnected');
+                    updateStatus('disconnected', `Connection issue: ${peerConnection.iceConnectionState}`);
                 }
             };
 
@@ -274,11 +274,17 @@
                     // Connect remote audio
                     const remoteStream = new MediaStream([event.track]);
                     remoteAudio.srcObject = remoteStream;
+                    log('Connected remote audio stream');
                 }
             };
 
-            // Create offer
-            createAndSendOffer();
+            // Verify WebSocket is connected before creating offer
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                createAndSendOffer();
+            } else {
+                log('WebSocket not connected, cannot create offer');
+                updateStatus('disconnected', 'WebSocket disconnected');
+            }
         }
 
         async function createAndSendOffer() {
@@ -311,6 +317,14 @@
                 switch (message.type) {
                     case 'connection_confirmed':
                         log(`Connection confirmed: ${message.connection_id}`);
+                        setupPeerConnection();
+                        break;
+
+                    case 'connection_established':
+                        log('Connection established with server');
+                        // Success! Update UI
+                        connectButton.disabled = true;
+                        disconnectButton.disabled = false;
                         break;
 
                     case 'webrtc_answer':

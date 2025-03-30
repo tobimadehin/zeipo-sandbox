@@ -13,7 +13,7 @@ def format_time(seconds):
 def main():
     parser = argparse.ArgumentParser(description="Transcribe audio with Whisper")
     parser.add_argument("audio", nargs="?", help="Audio file to transcribe")
-    parser.add_argument("--model", default="small", help="Model to use (tiny, base, small, medium, large)")
+    parser.add_argument("--model", default="tiny", help="Model to use (tiny, base, small, medium, large)")
     parser.add_argument("--language", help="Language code (if known)")
     parser.add_argument("--output", help="Output file for transcription")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed information")

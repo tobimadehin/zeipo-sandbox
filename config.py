@@ -6,8 +6,10 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     TZ: str = "Africa/Lagos"
     
-    TELEPHONY_PROVIDER: str = "signalwire"
+    SERVER_IP: str = "0.0.0.0"
+
     DEFAULT_TELEPHONY_PROVIDER: str = "signalwire"
+    WEBHOOK_ENTRY: bool = True
     
     AT_USER: str = "sandbox"  
     AT_API_KEY: str = ""

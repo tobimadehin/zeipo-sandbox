@@ -115,6 +115,8 @@ class FreeSwitchESL:
                 "caller_id": caller_id,
                 "direction": direction
             })
+            
+            logger.debug(f"Firing a call.created event for session_id: {session_id}, caller_id: {caller_id}, direction: {direction}")
         
         elif event_name == "CHANNEL_ANSWER":
             # Call answered
@@ -127,6 +129,8 @@ class FreeSwitchESL:
                     "caller_id": self.active_calls[session_id].get("caller_id"),
                     "direction": self.active_calls[session_id].get("direction")
                 })
+                
+            logger.debug(f"Firing a call.answered event for session_id: {session_id}, caller_id: {self.active_calls[session_id].get('caller_id')}, direction: {self.active_calls[session_id].get('direction')}")
         
         elif event_name == "CHANNEL_HANGUP":
             # Call ended
@@ -149,6 +153,8 @@ class FreeSwitchESL:
                 
                 # Remove from active calls
                 del self.active_calls[session_id]
+                
+            logger.debug(f"Firing a call.ended event for session_id: {session_id}, caller_id: {self.active_calls[session_id].get('caller_id')}, direction: {self.active_calls[session_id].get('direction')}, duration: {duration}, hangup_cause: {hangup_cause}")
         
         elif event_name == "DTMF":
             # DTMF keypress
@@ -160,6 +166,8 @@ class FreeSwitchESL:
                         "session_id": session_id,
                         "digit": digit
                     })
+        
+            logger.debug(f"Firing a call.dtmf event for session_id: {session_id}, digit: {digit}")
         
         elif event_name == "DETECTED_SPEECH":
             # Speech detected (if using mod_pocketsphinx or similar)
@@ -174,6 +182,7 @@ class FreeSwitchESL:
                         "type": speech_type
                     })
     
+            logger.debug(f"Firing a call.speech event for session_id: {session_id}, text: {speech_text}, type: {speech_type}")
     def _trigger_callback(self, event_type, data):
         """Trigger registered callbacks for event."""
         if event_type in self.callbacks:
@@ -187,6 +196,8 @@ class FreeSwitchESL:
         """Register a callback for a specific event type."""
         if event_type not in self.callbacks:
             self.callbacks[event_type] = []
+            
+        logger.debug(f"Forwarded event type: {event_type} from FreeSWITCH ESL to signalwire client")
         
         self.callbacks[event_type].append(callback)
         return True

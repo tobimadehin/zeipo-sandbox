@@ -35,10 +35,8 @@ class AudioStreamManager:
         websocket: WebSocket, 
         session_id: str,
         connection_id: str,
-        language: Optional[str] = None,
-        model_name: str = "small",
+        model_name: str = "tiny",
         callback: Optional[Callable] = None,
-        send_default_updates: bool = True
     ) -> None:
         """
         Connect a new WebSocket client.
@@ -47,7 +45,6 @@ class AudioStreamManager:
             websocket: The WebSocket connection
             session_id: The call session ID
             connection_id: Unique identifier for this connection
-            language: Preferred language code (optional)
             model_name: Whisper model to use
             callback: Optional external callback for transcription results
         """    
@@ -64,12 +61,7 @@ class AudioStreamManager:
         provider = get_stt_provider()
         
         # Initialize streaming transcriber
-        transcriber = provider.create_streaming_transcriber(
-            model_name=model_name,
-            language=language,
-            chunk_size_ms=1000,
-            buffer_size_ms=5000
-        )
+        provider.create_streaming_transcriber(model_name=model_name)
         
         # Prepare connection data
         connection_data = {
@@ -78,14 +70,12 @@ class AudioStreamManager:
             "connection_id": connection_id,
             "file_path": file_path,
             "wave_file": wf,
-            "transcriber": transcriber,
             "audio_buffer": bytearray(),
             "start_time": datetime.now(),
             "last_activity": datetime.now(),
             "transcription_results": [],
             "is_finalized": False,
             "external_callback": callback,
-            "send_default_updates": send_default_updates
         }
         
         # Store connection
@@ -93,6 +83,8 @@ class AudioStreamManager:
         
         # Start the transcriber
         def transcription_callback_wrapper(result):
+            logger.debug(f"Transcription callback called for {connection_id}")
+            
             connection_data["transcription_results"].append(result)
             connection_data["last_activity"] = datetime.now()
             
@@ -107,7 +99,7 @@ class AudioStreamManager:
         # Sent transcript updates to the client
         async def send_transcript_update(result):
             try:
-                if connection_data.get("send_default_updates", True) and connection_data["websocket"].client_state == WebSocketState.CONNECTED:
+                if connection_data["websocket"].client_state == WebSocketState.CONNECTED:
                     await connection_data["websocket"].send_json({
                         "type": "audio_stream",
                         "connection_id": connection_id,
@@ -120,8 +112,10 @@ class AudioStreamManager:
         
         # Store the event loop in connection data
         connection_data["loop"] = asyncio.get_event_loop()
+        
+        logger.debug(f"Attempting to start transcription for {connection_id}")
 
-        transcriber.start(transcription_callback_wrapper)
+        self.start(transcription_callback_wrapper)
         
         logger.info(f"WebSocket connection established: {connection_id} for session {session_id}")
         

@@ -7,5 +7,4 @@ from src.telephony.provider_factory import get_telephony_provider
 
 # Import all provider implementations to register them
 from src.telephony.integrations.at import AfricasTalkingProvider
-from src.telephony.integrations.voip_simulator import VoipSimulatorProvider
 from src.telephony.integrations.signalwire import SignalWireProvider

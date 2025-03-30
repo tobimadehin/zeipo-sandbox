@@ -21,7 +21,7 @@ class AfricasTalkingProvider(TelephonyProvider):
         # Initialize Africa's Talking SDK
         africastalking.initialize(settings.AT_USER, settings.AT_API_KEY)
         self.voice = africastalking.Voice
-        logger.info(f"Africa's Talking provider initialized with user: {settings.AT_USER}")
+        logger.info(f"Africa's Talking provider initialized")
     
     def build_voice_response(
         self, 
@@ -282,6 +282,11 @@ class AfricasTalkingProvider(TelephonyProvider):
             "provider": "at",
             "raw_data": request_data
         }
+
+    def stop(self) -> None:
+        """Stop the provider and clean up resources."""
+        # Nothing to specifically clean for now
+        logger.info("Stopped Africa's Talking provider")
 
 # Register the provider
 register_provider("at", AfricasTalkingProvider)

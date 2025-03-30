@@ -17,7 +17,7 @@
   </domains>
 
   <settings>
-    <param name="debug" value="0"/>
+    <param name="debug" value="10"/>
     <!-- If you want FreeSWITCH to shutdown if this profile fails to load, uncomment the next line. -->
     <!-- <param name="shutdown-on-fail" value="true"/> -->
     <param name="sip-trace" value="no"/>
@@ -70,6 +70,8 @@
     <!--<param name="enable-3pcc" value="true"/>-->
 
     <param name="dtls-srtp" value="true"/>
+    <param name="dtls-cert-file" value="$${certs_dir}/dtls-srtp.pem"/>
+
     <param name="sip-trace" value="true"/>
 
     <param name="ws-binding" value=":5066"/>

@@ -56,6 +56,19 @@ POST /api/v1/events
 ```
 Webhook for handling call events like hangup, transfer, etc.
 
+**Event Driven Architecture**
+![alt text](../../static/events-driven-architecture.jpg)
+
+### Runtime Event Flow:
+- FreeSWITCH generates an event (e.g., incoming call)
+- FreeSwitchESL receives the event via ESL
+- FreeSwitchESL calls SignalWireClient's event handler (e.g., _on_esl_call_created)
+- SignalWireClient processes event and calls your registered callbacks
+- Zeipo client executes callback functions execute in response
+- Rinse and repeat...
+
+This event-driven architecture allows Zeipo API to respond to telephony events asynchronously
+
 **Form Parameters:**
 - `sessionId`: The unique session ID for the call
 - `status`: Current status of the call

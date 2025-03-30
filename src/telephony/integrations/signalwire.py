@@ -47,6 +47,20 @@ class SignalWireProvider(TelephonyProvider):
         caller_id = data.get("caller_id", "unknown")
         direction = data.get("direction", "unknown")
         
+        # Create call session in database if it doesn't exist
+        try:
+            loop = asyncio.new_event_loop()
+            session_id = loop.run_until_complete(
+                CallHandler.create_call_session(
+                    phone_number=caller_id,
+                    provider_name="signalwire",
+                    session_id=session_id
+                )
+            )
+            loop.close()
+        except Exception as e:
+            logger.error(f"Error creating call session in database: {str(e)}")
+        
         # Log call creation
         log_call_to_file(
             call_sid=session_id,
@@ -361,20 +375,6 @@ class SignalWireProvider(TelephonyProvider):
         phone_number = request_data.get("callerNumber", request_data.get("phone_number", "anonymous"))
         direction = request_data.get("direction", "inbound")
         
-        # Create call session in database if it doesn't exist
-        try:
-            loop = asyncio.new_event_loop()
-            session_id = loop.run_until_complete(
-                CallHandler.create_call_session(
-                    phone_number=phone_number,
-                    provider_name="signalwire",
-                    session_id=session_id
-                )
-            )
-            loop.close()
-        except Exception as e:
-            logger.error(f"Error creating call session in database: {str(e)}")
-        
         # Log call to file
         log_call_to_file(
             call_sid=session_id,
@@ -562,6 +562,13 @@ class SignalWireProvider(TelephonyProvider):
         """Set the SignalWire client instance."""
         self.client = client
         return True
+    
+    def stop(self) -> None:
+        """Stop the provider and clean up resources."""
+        # Stop the SignalWire client
+        if hasattr(self, 'client') and self.client:
+            self.client.stop()
+        logger.info("Stopped SignalWire provider")
 
 # Register the provider
 register_provider("signalwire", SignalWireProvider)

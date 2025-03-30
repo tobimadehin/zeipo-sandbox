@@ -77,4 +77,14 @@ services:
       - ./redis-data:/data
     network_mode: host
     restart: unless-stopped
+
+  # linphone:
+  #   build: 
+  #     context: ../docker/linphone.Dockerfile
+  #   network_mode: host
+  #   environment:
+  #     - DISPLAY=${DISPLAY}
+  #   volumes:
+  #     - /tmp/.X11-unix:/tmp/.X11-unix
+
   

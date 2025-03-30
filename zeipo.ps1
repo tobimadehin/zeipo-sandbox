@@ -360,7 +360,6 @@ switch ($Command) {
         Write-Host "  tts                                           - Generate speech from text"
         Write-Host "  zeipo voice                                   - Start with Africa's Talking + Cloudflare tunnel"
         Write-Host "  zeipo voice -local                            - Start with Africa's Talking on local network"
-        Write-Host "  zeipo voice -provider voip_simulator -local   - Start with VoIP simulator"
         Write-Host "  build                                         - Build or rebuild the Docker image"
         Write-Host "  clean                                         - Clean up corrupted model files"
         Write-Host "  start                                         - Start the Docker container"
