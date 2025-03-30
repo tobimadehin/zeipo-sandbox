@@ -1,0 +1,16 @@
+<include>
+  <!-- Route calls between extensions -->
+  <extension name="internal_calls">
+    <condition field="destination_number" expression="^(10\d\d)$">
+      <action application="bridge" data="user/$1@$${domain}"/>
+    </condition>
+  </extension>
+  
+  <!-- Echo test - call this to hear yourself -->
+  <extension name="echo_test">
+    <condition field="destination_number" expression="^9196$">
+      <action application="answer"/>
+      <action application="echo"/>
+    </condition>
+  </extension>
+</include>

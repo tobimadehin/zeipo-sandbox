@@ -12,7 +12,8 @@
 
        WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING WARNING
   -->
-  <X-PRE-PROCESS cmd="set" data="default_password=GcjAhOGpz-17"
+  <!-- TODO: REMOVE -->
+  <X-PRE-PROCESS cmd="set" data="default_password=Hemanu4546!"/>
   <X-PRE-PROCESS cmd="set" data="disable_system_api_commands=true"/>
   <!-- Did you change it yet? -->
   <!--
@@ -300,7 +301,7 @@
        If unspecified, the bind_server_ip value is used.
        Used by: sofia.conf.xml dingaling.conf.xml
   -->
-  <X-PRE-PROCESS cmd="stun-set" data="external_rtp_ip=stun:stun.freeswitch.org"/>
+  <X-PRE-PROCESS cmd="set" data="external_rtp_ip=172.26.48.1"/>
 
   <!-- external_sip_ip
       Used as the public IP address for SDP.
@@ -313,7 +314,7 @@
        If unspecified, the bind_server_ip value is used.
        Used by: sofia.conf.xml dingaling.conf.xml
   -->
-  <X-PRE-PROCESS cmd="stun-set" data="external_sip_ip=stun:stun.freeswitch.org"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_ip=172.26.48.1"/>
 
   <!-- unroll-loops
        Used to turn on sip loopback unrolling.

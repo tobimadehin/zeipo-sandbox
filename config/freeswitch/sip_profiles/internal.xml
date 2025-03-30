@@ -46,7 +46,7 @@
     <!-- Can be set to "_undef_" to remove the User-Agent header -->
     <!-- <param name="user-agent-string" value="FreeSWITCH Rocks!"/> -->
 
-    <param name="debug" value="0"/>
+    <param name="debug" value="10"/>
     <!-- If you want FreeSWITCH to shutdown if this profile fails to load, uncomment the next line. -->
     <!-- <param name="shutdown-on-fail" value="true"/> -->
     <param name="sip-trace" value="no"/>
@@ -261,7 +261,7 @@
     <!-- Disable Transfer -->
     <!--<param name="disable-transfer" value="true"/> -->
     <!-- Disable Register -->
-    <!--<param name="disable-register" value="true"/> -->
+    <param name="disable-register" value="true"/> 
     <!-- Used for when phones respond to a challenged ACK with method INVITE in the hash -->
     <!--<param name="NDLB-broken-auth-hash" value="true"/>-->
     <!-- add a ;received="<ip>:<port>" to the contact when replying to register for nat handling -->
