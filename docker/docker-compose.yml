@@ -78,3 +78,57 @@ services:
     network_mode: host
     restart: unless-stopped
   
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - zeipo-network
+    
+  grafana:
+    image: grafana/grafana:11.6.0
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - zeipo-network
+    env_file:
+      - ./.env
+    depends_on:
+      - prometheus
+      
+  timescaledb:
+    image: timescale/timescaledb:2.19.0-pg14
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./config/timescaledb/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./.env
+    networks:
+      - zeipo-network
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  timescale_data:
+
+networks:
+  zeipo-network:
+    driver: bridge

@@ -20,7 +20,8 @@ from src.telephony import get_telephony_provider
 from src.tts import get_tts_provider
 from src.utils.helpers import gen_uuid_12, gen_uuid_16
 from static.constants import logger
-from src.streaming.audio_streaming import AudioStreamManager 
+from src.streaming.audio_streaming import AudioStreamManager
+from src.analytics.metrics import metrics_service
 
 # Global variables
 stream_manager = AudioStreamManager()
@@ -75,6 +76,10 @@ class CallHandler:
                                 provider_name: str = "unknown", 
                                 session_id: Optional[str] = None) -> str:
         """Create a database record for this call."""
+        session_id = gen_uuid_12()
+        
+        metrics_service.record_call_start(session_id, provider_name)
+        
         db = SessionLocal()
         try:
             # Find or create customer
@@ -92,14 +97,6 @@ class CallHandler:
                 logger.info(f"Found existing customer: ID={customer.id}")
                 customer.last_activity = datetime.now()
             
-            # Create call session
-            session_id = session_id or gen_uuid_12()
-            
-            existing_session = db.query(CallSession).filter(CallSession.session_id == session_id).first()
-            if existing_session:
-                logger.info(f"Found existing call session: ID={existing_session.id}, SessionID={session_id}")
-                return existing_session.session_id
-            
             call_session = CallSession(
                 session_id=session_id,
                 customer_id=customer.id,
@@ -113,9 +110,11 @@ class CallHandler:
             return session_id
         except Exception as e:
             logger.error(f"Database error creating call session: {str(e)}")
+            metrics_service.record_error("database", f"session_creation_error: {type(e).__name__}")
             if db.is_active:
                 db.rollback()
-            return gen_uuid_12()  # Fallback
+            
+            return session_id  # Fallback
         finally:
             db.close()
     
