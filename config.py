@@ -2,6 +2,8 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    BASE_URL: str = "https://sandbox.zeipo.org"
+    
     DATABASE_URL: str = "sqlite:///./zeipo.db"
     API_V1_STR: str = "/api/v1"
     
@@ -13,10 +15,6 @@ class Settings(BaseSettings):
     AT_PHONE: str = ""
     
     VOIP_SIMULATOR_ENABLED: bool = True
-
-    WEBHOOK_URL: str = "http://localhost:8000"
-    
-    WS_URL: str = "ws://localhost:8000/api/v1/ws"
     
     GOOGLE_TTS_ENABLED: bool = False
     GOOGLE_TTS_DEFAULT_VOICE_LOCALE: str = "en-US"

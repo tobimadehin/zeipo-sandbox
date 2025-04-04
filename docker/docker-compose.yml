@@ -1,8 +1,9 @@
 services:
-  whisper:
+  core:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    container_name: zeipo-core
     volumes:
       - ..:/app
     ports:

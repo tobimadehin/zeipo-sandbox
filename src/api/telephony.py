@@ -97,6 +97,8 @@ class CallHandler:
             phone_number = call_data.get("phone_number", f"anonymous-{gen_uuid_12()}")
             session_id = await CallHandler.create_call_session(phone_number, provider_name, _session_id)
             
+            time.sleep(0.5)
+            
             # Generate provider-specific response
             voice_response = telephony_provider.build_voice_response(
                 say_text="Welcome to Zeipo AI. How can I help you today?" 
