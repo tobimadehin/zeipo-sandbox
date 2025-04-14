@@ -128,10 +128,6 @@ The project supports the following Whisper models:
 | medium| 769M       | ~5 GB        | High accuracy, slower             |
 | large | 1550M      | ~10 GB       | Highest accuracy, slowest         |
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Setting Up Your Environment
 
 Now that you have created all the necessary files, follow these steps to get your environment up and running:
