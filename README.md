@@ -2,6 +2,8 @@
 
 This repository contains the Whisper speech recognition integration for Zeipo.ai, an AI-driven telephony solution designed for businesses in Africa. The solution uses OpenAI's Whisper model to transcribe and understand multiple African languages.
 
+Learn more: [zeipo.ai!](https://zeipo.ai)
+
 ## Getting Started
 
 ### Prerequisites
