@@ -178,4 +178,4 @@ The Docker-based development environment ensures a consistent and reproducible s
 
 ## License
 
-Copyright © 2025 Zeipo.ai - All Rights Reserved
+MIT License — see [LICENSE](LICENSE) for details.
